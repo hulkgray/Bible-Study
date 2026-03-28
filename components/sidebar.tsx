@@ -30,7 +30,7 @@ const fetcher = (url: string) =>
   }).then((res) => res.data);
 
 const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: Home },
+  { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/bible", label: "Bible", icon: BookOpen },
   { href: "/search", label: "Search", icon: Search },
   { href: "/strongs", label: "Strong's", icon: Languages },
@@ -121,12 +121,18 @@ export function Sidebar() {
               "flex items-center gap-2 px-2 py-2",
               collapsed && "justify-center"
             )}>
-              <div className="h-7 w-7 rounded-full bg-gold/20 flex items-center justify-center shrink-0">
+              <Link
+                href="/profile"
+                className="h-7 w-7 rounded-full bg-gold/20 flex items-center justify-center shrink-0 hover:bg-gold/30 transition-colors"
+                title="Profile"
+              >
                 <User className="h-3.5 w-3.5 text-gold" />
-              </div>
+              </Link>
               {!collapsed && (
                 <div className="flex-1 min-w-0 animate-fade-in">
-                  <p className="text-xs font-medium truncate">{user.name}</p>
+                  <Link href="/profile" className="text-xs font-medium truncate block hover:text-gold transition-colors">
+                    {user.name}
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors flex items-center gap-1"

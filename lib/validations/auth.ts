@@ -26,6 +26,32 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+/** POST /api/auth/forgot-password — request body */
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string()
+    .email("Please enter a valid email address")
+    .transform((v) => v.toLowerCase().trim()),
+});
+
+/** POST /api/auth/reset-password — request body */
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1, "Reset token is required"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128, "Password must be under 128 characters"),
+});
+
+/** POST /api/auth/change-password — request body */
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z
+    .string()
+    .min(8, "New password must be at least 8 characters")
+    .max(128, "Password must be under 128 characters"),
+});
+
 /** POST /api/bookmarks — request body */
 export const bookmarkToggleSchema = z.object({
   book: z.string().min(1, "Book name is required"),

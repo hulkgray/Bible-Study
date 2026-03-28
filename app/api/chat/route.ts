@@ -1,6 +1,10 @@
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
+import { NextRequest } from "next/server";
 import { DEFAULT_MODEL, DEFAULT_TEMPERATURE, SUPPORTED_MODELS } from "@/lib/constants";
 import { gateway } from "@/lib/gateway";
+import { getCurrentUser } from "@/lib/session";
+import { aiRateLimit } from "@/lib/rate-limit";
+import { logTokenUsage } from "@/lib/ai-usage";
 
 export const maxDuration = 60;
 
@@ -28,11 +32,38 @@ Guidelines:
 8. Reference cross-references to help the user see the broader biblical narrative.
 9. Ground every theological claim in specific Scripture citations — never make assertions without verse references.`;
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  // Authentication — checklist item 1
+  const user = await getCurrentUser();
+  if (!user) {
+    return new Response(
+      JSON.stringify({ error: "Unauthorized" }),
+      { status: 401, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
+  // Rate limiting — checklist item 12
+  if (aiRateLimit) {
+    const { success, remaining } = await aiRateLimit.limit(user.userId);
+    if (!success) {
+      return new Response(
+        JSON.stringify({ error: "Rate limit exceeded. Please wait a moment before trying again." }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "X-RateLimit-Remaining": String(remaining),
+          },
+        }
+      );
+    }
+  }
+
   const {
     messages,
     modelId = DEFAULT_MODEL,
-  }: { messages: UIMessage[]; modelId: string } = await req.json();
+    sessionId,
+  }: { messages: UIMessage[]; modelId: string; sessionId?: string } = await req.json();
 
   if (!SUPPORTED_MODELS.includes(modelId)) {
     return new Response(
@@ -48,6 +79,18 @@ export async function POST(req: Request) {
     messages: convertToModelMessages(messages),
     onError: (e) => {
       console.error("[API /chat] Error while streaming:", e);
+    },
+    onFinish: async ({ usage }) => {
+      // Log token usage to database — non-blocking
+      if (usage) {
+        await logTokenUsage({
+          userId: user.userId,
+          modelId,
+          promptTokens: usage.inputTokens ?? 0,
+          completionTokens: usage.outputTokens ?? 0,
+          sessionId,
+        });
+      }
     },
   });
 

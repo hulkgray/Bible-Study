@@ -5,22 +5,36 @@ const COOKIE_NAME = "bible_session";
 
 /**
  * Routes that require authentication.
- * Everything else is public (Bible text, search, dictionary, library, devotional).
+ * Everything else is public (Bible text, search, dictionary, library, devotional, landing).
  */
 const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/profile",
   "/study",
   "/notes",
   "/api/notes",
   "/api/bookmarks",
   "/api/chat",
+  "/api/auth/change-password",
+  "/api/auth/usage",
 ];
 
 /** Routes that are always public, even if they match a protected prefix */
-const PUBLIC_EXACT = ["/login", "/signup", "/api/auth/login", "/api/auth/signup", "/api/auth/logout"];
+const PUBLIC_EXACT = [
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/api/auth/login",
+  "/api/auth/signup",
+  "/api/auth/logout",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
+];
 
 function getSecretKey() {
   const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("[Middleware] JWT_SECRET is not configured");
+  if (!secret) throw new Error("[Proxy] JWT_SECRET is not configured");
   return new TextEncoder().encode(secret);
 }
 
@@ -32,7 +46,7 @@ function isPublicExact(pathname: string): boolean {
   return PUBLIC_EXACT.some((p) => pathname === p || pathname.startsWith(p));
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Skip public routes
@@ -78,11 +92,15 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Match protected page routes
+    "/dashboard/:path*",
+    "/profile/:path*",
     "/study/:path*",
     "/notes/:path*",
     // Match protected API routes
     "/api/notes/:path*",
     "/api/bookmarks/:path*",
     "/api/chat/:path*",
+    "/api/auth/change-password",
+    "/api/auth/usage",
   ],
 };
