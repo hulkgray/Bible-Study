@@ -168,9 +168,9 @@ export function Sidebar() {
       </aside>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-t border-border">
-        <div className="flex justify-around py-2 px-1">
-          {NAV_ITEMS.slice(0, 5).map((item) => {
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border safe-area-bottom">
+        <div className="flex overflow-x-auto hide-scrollbar px-1 py-2 gap-0.5">
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive =
               pathname === item.href ||
@@ -181,14 +181,14 @@ export function Sidebar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg text-xs transition-colors",
+                  "flex flex-col items-center gap-0.5 min-w-14 px-2 py-1 rounded-lg text-[10px] transition-colors shrink-0",
                   isActive
                     ? "text-gold"
                     : "text-muted-foreground"
                 )}
               >
-                <Icon className="h-5 w-5" />
-                <span>{item.label}</span>
+                <Icon className="h-4 w-4" />
+                <span className="truncate">{item.label}</span>
               </Link>
             );
           })}

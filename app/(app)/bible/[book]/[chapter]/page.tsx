@@ -4,10 +4,11 @@ import { useParams, useRouter } from "next/navigation";
 import useSWR, { mutate } from "swr";
 import { BIBLE_BOOKS, TRANSLATIONS } from "@/lib/bible-books";
 import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Bookmark, Copy, Check, Info, X, Languages } from "lucide-react";
+import { ChevronLeft, ChevronRight, Bookmark, Copy, Check, Info, X, Languages, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import DOMPurify from "isomorphic-dompurify";
 import { StrongsVerse } from "@/components/strongs-verse";
+import { BibleIndexSidebar } from "@/components/bible-index-sidebar";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => r.json()).then((res) => res.data ?? res);
@@ -22,6 +23,7 @@ export default function BibleReaderPage() {
   const [copiedVerse, setCopiedVerse] = useState<number | null>(null);
   const [showItalicInfo, setShowItalicInfo] = useState(false);
   const [interlinearMode, setInterlinearMode] = useState(false);
+  const [showBibleIndex, setShowBibleIndex] = useState(false);
 
   // Check if italic info banner has been dismissed
   useEffect(() => {
@@ -114,15 +116,32 @@ export default function BibleReaderPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
+      {/* Bible Index Sidebar */}
+      <BibleIndexSidebar
+        isOpen={showBibleIndex}
+        onClose={() => setShowBibleIndex(false)}
+        activeBookSlug={bookSlug}
+        activeChapter={chapterNum}
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6 animate-fade-in">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-scripture font-semibold">
-            {bookInfo.name}
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Chapter {chapterNum} of {bookInfo.chapters}
-          </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowBibleIndex(true)}
+            className="p-2 rounded-lg bg-muted hover:bg-accent transition-colors"
+            title="Bible Book Index"
+          >
+            <BookOpen className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-scripture font-semibold">
+              {bookInfo.name}
+            </h1>
+            <p className="text-muted-foreground text-sm mt-0.5">
+              Chapter {chapterNum} of {bookInfo.chapters}
+            </p>
+          </div>
         </div>
 
         {/* Chapter navigation */}
