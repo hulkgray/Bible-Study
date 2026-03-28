@@ -20,6 +20,7 @@ export const searchQuerySchema = z.object({
 export const dictionaryQuerySchema = z.object({
   q: z.string().min(1).max(200).optional(),
   letter: z.string().length(1).regex(/^[a-zA-Z]$/).optional(),
+  source: z.enum(["easton", "webster1828"]).optional().default("easton"),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
 }).refine((data) => data.q || data.letter, {
   message: "Either 'q' or 'letter' must be provided",

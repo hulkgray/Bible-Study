@@ -613,8 +613,31 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                         ) : (
                           <div key={`${m.id}-${i}`}>{part.text}</div>
                         );
-                      default:
+                      default: {
+                        // Handle tool call parts (tool-lookup_verse, tool-lookup_strongs, etc.)
+                        if (part.type.startsWith("tool-")) {
+                          const toolName = part.type.replace("tool-", "").replace(/_/g, " ");
+                          const state = (part as { state?: string }).state;
+                          const isRunning = state !== "output-available";
+
+                          return (
+                            <div
+                              key={`${m.id}-tool-${i}`}
+                              className="flex items-center gap-2 py-1.5 px-3 my-1 rounded-lg bg-gold/5 border border-gold/10 text-xs text-gold/70 animate-fade-in"
+                            >
+                              {isRunning ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Check className="h-3 w-3" />
+                              )}
+                              <span className="capitalize">
+                                {isRunning ? `Looking up ${toolName}…` : `Found ${toolName}`}
+                              </span>
+                            </div>
+                          );
+                        }
                         return null;
+                      }
                     }
                   })}
 

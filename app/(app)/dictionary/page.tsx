@@ -2,24 +2,24 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { BookText, Search as SearchIcon } from "lucide-react";
+import { BookText, Search as SearchIcon, Menu } from "lucide-react";
 import { VerseLinks } from "@/components/verse-links";
-import { cn } from "@/lib/utils";
+import { DictionaryIndexSidebar } from "@/components/dictionary-index-sidebar";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export default function DictionaryPage() {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [activeLetter, setActiveLetter] = useState<string | null>(null);
+  const [activeSource, setActiveSource] = useState<"easton" | "webster1828">("easton");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Build the API URL based on active mode (search vs letter browse)
   const apiUrl = activeLetter
-    ? `/api/dictionary?letter=${activeLetter}&limit=100`
+    ? `/api/dictionary?letter=${activeLetter}&source=${activeSource}&limit=100`
     : submittedQuery
-      ? `/api/dictionary?q=${encodeURIComponent(submittedQuery)}`
+      ? `/api/dictionary?q=${encodeURIComponent(submittedQuery)}&source=${activeSource}`
       : null;
 
   const { data, isLoading } = useSWR(apiUrl, fetcher, {
@@ -31,13 +31,13 @@ export default function DictionaryPage() {
     e.preventDefault();
     if (query.trim()) {
       setSubmittedQuery(query.trim());
-      setActiveLetter(null); // Clear letter when searching
+      setActiveLetter(null);
     }
   };
 
   const handleLetterClick = (letter: string) => {
     setActiveLetter(letter === activeLetter ? null : letter);
-    setSubmittedQuery(""); // Clear search when browsing by letter
+    setSubmittedQuery("");
     setQuery("");
   };
 
@@ -45,39 +45,38 @@ export default function DictionaryPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <div className="mb-6 animate-fade-in">
-        <h1 className="text-2xl sm:text-3xl font-scripture font-semibold mb-2">
-          Bible Dictionary
-        </h1>
-        <p className="text-muted-foreground text-sm">
-          Easton&apos;s Bible Dictionary — 1,210 pages of biblical reference
-        </p>
-      </div>
+      {/* Dictionary Index Sidebar */}
+      <DictionaryIndexSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        activeLetter={activeLetter}
+        onLetterClick={handleLetterClick}
+        activeSource={activeSource}
+        onSourceChange={setActiveSource}
+      />
 
-      {/* A–Z Letter Bar */}
-      <div className="mb-6 animate-slide-up relative">
-        <div className="flex gap-1 overflow-x-auto hide-scrollbar pb-2">
-          {ALPHABET.map((letter) => (
-            <button
-              key={letter}
-              onClick={() => handleLetterClick(letter)}
-              className={cn(
-                "shrink-0 w-9 h-9 rounded-lg text-sm font-medium transition-all duration-150",
-                activeLetter === letter
-                  ? "bg-gold text-gold-foreground shadow-border-small scale-105"
-                  : "bg-card border border-border hover:bg-muted hover:border-gold/30 text-foreground/70 hover:text-foreground"
-              )}
-            >
-              {letter}
-            </button>
-          ))}
+      {/* Header */}
+      <div className="mb-6 animate-fade-in flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-scripture font-semibold mb-1">
+            Bible Dictionary
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            {activeSource === "easton" ? "Easton's Bible Dictionary" : "Webster's 1828 Dictionary"}
+            {activeLetter && ` — Letter ${activeLetter}`}
+          </p>
         </div>
-        {/* Right fade hint for horizontal scroll */}
-        <div className="absolute right-0 top-0 bottom-2 w-8 bg-linear-to-l from-background to-transparent pointer-events-none md:hidden" />
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="p-2.5 rounded-xl bg-card border border-border hover:border-gold/30 hover:bg-muted transition-all shadow-border-small"
+          title="Open Dictionary Index"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Search bar */}
-      <form onSubmit={handleSearch} className="mb-8 animate-slide-up" style={{ animationDelay: "50ms" }}>
+      <form onSubmit={handleSearch} className="mb-8 animate-slide-up">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -85,7 +84,11 @@ export default function DictionaryPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Look up a biblical term, person, or place..."
+              placeholder={
+                activeSource === "easton"
+                  ? "Look up a biblical term, person, or place..."
+                  : "Search Webster's 1828 Dictionary..."
+              }
               className="w-full pl-10 pr-4 py-3 rounded-xl bg-card border border-border text-sm focus:outline-none focus:ring-2 focus:ring-gold/30 focus:border-gold/50 transition-all"
             />
           </div>
@@ -103,7 +106,7 @@ export default function DictionaryPage() {
         <div className="mb-4 flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
             {activeLetter
-              ? `Showing entries starting with "${activeLetter}" (${results.length})`
+              ? `Entries starting with "${activeLetter}" (${results.length})`
               : `Results for "${submittedQuery}" (${results.length})`}
           </p>
           <button
@@ -148,7 +151,7 @@ export default function DictionaryPage() {
       {!isLoading && !submittedQuery && !activeLetter && (
         <div className="text-center py-16 text-muted-foreground animate-fade-in">
           <BookText className="h-10 w-10 mx-auto mb-4 opacity-30" />
-          <p className="text-sm">Select a letter or search to browse the dictionary</p>
+          <p className="text-sm">Tap the index button to browse by letter, or search above</p>
         </div>
       )}
 
@@ -165,7 +168,7 @@ export default function DictionaryPage() {
                 <h3 className="text-gold font-semibold text-lg mb-2">
                   {entry.headword}
                 </h3>
-                <div className="font-scripture text-sm leading-relaxed text-foreground/85">
+                <div className="font-scripture text-sm leading-relaxed text-foreground/85 wrap-break-word overflow-hidden">
                   <VerseLinks text={entry.definition} />
                 </div>
               </div>

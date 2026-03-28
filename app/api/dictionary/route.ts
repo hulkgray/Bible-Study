@@ -5,7 +5,8 @@ import { dictionaryQuerySchema } from "@/lib/validations/bible";
 /**
  * GET /api/dictionary?q=aaron&limit=20
  * GET /api/dictionary?letter=A&limit=50
- * Search or browse Easton's Bible Dictionary entries.
+ * GET /api/dictionary?letter=A&source=webster1828
+ * Search or browse Easton's Bible Dictionary or Webster's 1828 Dictionary.
  * Compliance: #5 (raw SQL), #7 (Zod validation), #9 ({ data } wrapping)
  */
 export async function GET(request: NextRequest) {
@@ -23,35 +24,60 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { q, letter, limit } = validationResult.data;
+    const { q, letter, limit, source } = validationResult.data;
     const sql = getDbClient();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let rows: Record<string, any>[];
 
-    if (letter) {
-      // Browse by letter — all entries starting with that letter
-      rows = await sql`
-        SELECT id, headword, definition
-        FROM dictionary_entries
-        WHERE headword ILIKE ${letter + '%'}
-        ORDER BY headword
-        LIMIT ${limit}
-      `;
-    } else if (q) {
-      // Search by headword (prefix match) first, then full-text fallback
-      rows = await sql`
-        SELECT id, headword, definition
-        FROM dictionary_entries
-        WHERE headword ILIKE ${q + '%'}
-           OR to_tsvector('english', definition) @@ plainto_tsquery('english', ${q})
-        ORDER BY 
-          CASE WHEN headword ILIKE ${q + '%'} THEN 0 ELSE 1 END,
-          headword
-        LIMIT ${limit}
-      `;
+    if (source === "webster1828") {
+      // Webster's 1828 Dictionary
+      if (letter) {
+        rows = await sql`
+          SELECT id, word as headword, content as definition
+          FROM webster_1828
+          WHERE word ILIKE ${letter + '%'}
+          ORDER BY word
+          LIMIT ${limit}
+        `;
+      } else if (q) {
+        rows = await sql`
+          SELECT id, word as headword, content as definition
+          FROM webster_1828
+          WHERE word ILIKE ${q + '%'}
+             OR to_tsvector('english', content) @@ plainto_tsquery('english', ${q})
+          ORDER BY 
+            CASE WHEN word ILIKE ${q + '%'} THEN 0 ELSE 1 END,
+            word
+          LIMIT ${limit}
+        `;
+      } else {
+        rows = [];
+      }
     } else {
-      rows = [];
+      // Easton's Bible Dictionary (default)
+      if (letter) {
+        rows = await sql`
+          SELECT id, headword, definition
+          FROM dictionary_entries
+          WHERE headword ILIKE ${letter + '%'}
+          ORDER BY headword
+          LIMIT ${limit}
+        `;
+      } else if (q) {
+        rows = await sql`
+          SELECT id, headword, definition
+          FROM dictionary_entries
+          WHERE headword ILIKE ${q + '%'}
+             OR to_tsvector('english', definition) @@ plainto_tsquery('english', ${q})
+          ORDER BY 
+            CASE WHEN headword ILIKE ${q + '%'} THEN 0 ELSE 1 END,
+            headword
+          LIMIT ${limit}
+        `;
+      } else {
+        rows = [];
+      }
     }
 
     return NextResponse.json({
