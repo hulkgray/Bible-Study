@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import useSWR from "swr";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { X } from "lucide-react";
 
 const fetcher = (url: string) =>
   fetch(url)
@@ -27,8 +29,9 @@ interface CitationTooltipProps {
 }
 
 /**
- * CitationTooltip — wraps a verse reference link with a hover popover
- * that fetches and shows the actual verse text.
+ * CitationTooltip — wraps a verse reference link with:
+ * - Desktop: hover popover showing actual verse text
+ * - Mobile: tap opens a centered modal with verse text + "Open in Bible" link
  */
 export function CitationTooltip({
   bookSlug,
@@ -41,10 +44,16 @@ export function CitationTooltip({
 }: CitationTooltipProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<"above" | "below">("below");
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
   const triggerRef = useRef<HTMLAnchorElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(null);
 
-  // Only fetch when tooltip is open
+  // Detect touch device on mount
+  useEffect(() => {
+    setIsTouchDevice("ontouchstart" in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  // Only fetch when tooltip/modal is open
   const { data: chapterData } = useSWR(
     isOpen ? `/api/bible/${bookSlug}/${chapter}` : null,
     fetcher,
@@ -66,11 +75,12 @@ export function CitationTooltip({
     }
   }
 
-  function handleOpen() {
+  // Desktop hover handlers
+  function handleMouseEnter() {
+    if (isTouchDevice) return;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsOpen(true);
-    
-    // Calculate position
+
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
@@ -78,16 +88,28 @@ export function CitationTooltip({
     }
   }
 
-  function handleClose() {
+  function handleMouseLeave() {
+    if (isTouchDevice) return;
     timeoutRef.current = setTimeout(() => setIsOpen(false), 200);
   }
 
   function handleTooltipEnter() {
+    if (isTouchDevice) return;
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
   }
 
   function handleTooltipLeave() {
+    if (isTouchDevice) return;
     timeoutRef.current = setTimeout(() => setIsOpen(false), 200);
+  }
+
+  // Mobile tap handler
+  function handleClick(e: React.MouseEvent) {
+    if (isTouchDevice) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsOpen(true);
+    }
   }
 
   useEffect(() => {
@@ -96,15 +118,49 @@ export function CitationTooltip({
     };
   }, []);
 
+  // Lock body scroll when modal is open on mobile
+  useEffect(() => {
+    if (isTouchDevice && isOpen) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [isTouchDevice, isOpen]);
+
+  // Verse content (shared between tooltip and modal)
+  const verseContent = (
+    <>
+      {verseTexts.length > 0 ? (
+        <div className="space-y-1.5 max-h-60 overflow-y-auto hide-scrollbar">
+          {verseTexts.map((v) => (
+            <p key={v.verse} className="text-sm text-foreground/80 leading-relaxed">
+              <span className="text-gold/60 font-mono text-xs mr-1.5">{v.verse}</span>
+              {v.text}
+            </p>
+          ))}
+        </div>
+      ) : chapterData ? (
+        <p className="text-sm text-muted-foreground italic">Verse not found.</p>
+      ) : (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="h-3.5 w-3.5 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+          Loading verse...
+        </div>
+      )}
+    </>
+  );
+
   return (
     <span className="relative inline">
       <a
         ref={triggerRef}
         href={href}
-        onMouseEnter={handleOpen}
-        onMouseLeave={handleClose}
-        onFocus={handleOpen}
-        onBlur={handleClose}
+        onClick={handleClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleMouseEnter}
+        onBlur={handleMouseLeave}
         className={cn(
           "text-gold hover:text-gold/80 underline decoration-gold/30 hover:decoration-gold/60 transition-colors cursor-pointer",
           className
@@ -113,7 +169,8 @@ export function CitationTooltip({
         {children}
       </a>
 
-      {isOpen && (
+      {/* Desktop: hover tooltip */}
+      {isOpen && !isTouchDevice && (
         <div
           onMouseEnter={handleTooltipEnter}
           onMouseLeave={handleTooltipLeave}
@@ -125,23 +182,54 @@ export function CitationTooltip({
           <div className="text-xs font-medium text-gold mb-2">
             📖 {children}
           </div>
-          {verseTexts.length > 0 ? (
-            <div className="space-y-1 max-h-40 overflow-y-auto hide-scrollbar">
-              {verseTexts.map((v) => (
-                <p key={v.verse} className="text-xs text-foreground/80 leading-relaxed">
-                  <span className="text-gold/60 font-mono text-[10px] mr-1">{v.verse}</span>
-                  {v.text}
-                </p>
-              ))}
+          {verseContent}
+        </div>
+      )}
+
+      {/* Mobile: centered modal with backdrop */}
+      {isOpen && isTouchDevice && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(false);
+          }}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+          {/* Modal card */}
+          <div
+            className="relative z-10 w-full max-w-sm rounded-2xl bg-card border border-border shadow-2xl animate-scale-in p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold text-gold flex items-center gap-1.5">
+                📖 {children}
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="p-1 rounded-lg hover:bg-muted transition-colors"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
             </div>
-          ) : chapterData ? (
-            <p className="text-xs text-muted-foreground italic">Verse not found.</p>
-          ) : (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <div className="h-3 w-3 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
-              Loading verse...
+
+            {/* Verse content */}
+            <div className="mb-4">
+              {verseContent}
             </div>
-          )}
+
+            {/* Navigate to Bible button */}
+            <Link
+              href={href}
+              className="flex items-center justify-center gap-2 w-full py-2.5 px-4 rounded-xl bg-gold text-gold-foreground text-sm font-medium hover:bg-gold/90 transition-colors"
+              onClick={() => setIsOpen(false)}
+            >
+              Read in Bible →
+            </Link>
+          </div>
         </div>
       )}
     </span>

@@ -18,9 +18,13 @@ export const searchQuerySchema = z.object({
 
 /** GET /api/dictionary — query params */
 export const dictionaryQuerySchema = z.object({
-  q: z.string().min(1, "Search query is required").max(200),
-  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+  q: z.string().min(1).max(200).optional(),
+  letter: z.string().length(1).regex(/^[a-zA-Z]$/).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+}).refine((data) => data.q || data.letter, {
+  message: "Either 'q' or 'letter' must be provided",
 });
+
 
 /** GET /api/strongs/[number] — params */
 export const strongsParamSchema = z.object({

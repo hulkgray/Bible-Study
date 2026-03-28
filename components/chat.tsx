@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   SendIcon,
+  Square,
   PlusIcon,
   ChevronDown,
   ChevronRight,
@@ -538,15 +539,28 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                         }
                       }}
                     />
-                    <Button
-                      type="submit"
-                      size="icon"
-                      variant="ghost"
-                      className="h-9 w-9 rounded-xl hover:bg-muted/50"
-                      disabled={!input.trim()}
-                    >
-                      <SendIcon className="h-4 w-4" />
-                    </Button>
+                    {isStreaming ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-9 w-9 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-500 transition-colors"
+                        onClick={() => stop()}
+                        title="Stop generating"
+                      >
+                        <Square className="h-4 w-4 fill-current" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="icon"
+                        variant="ghost"
+                        className="h-9 w-9 rounded-xl hover:bg-muted/50"
+                        disabled={!input.trim()}
+                      >
+                        <SendIcon className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </form>
@@ -764,15 +778,28 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                     }
                   }}
                 />
-                <Button
-                  type="submit"
-                  size="icon"
-                  variant="ghost"
-                  className="h-9 w-9 rounded-xl hover:bg-accent hover:text-accent-foreground hover:scale-110 transition-all duration-150 ease disabled:opacity-50 disabled:hover:scale-100"
-                  disabled={!input.trim()}
-                >
-                  <SendIcon className="h-4 w-4" />
-                </Button>
+                {isStreaming ? (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-500 transition-colors"
+                    onClick={() => stop()}
+                    title="Stop generating"
+                  >
+                    <Square className="h-4 w-4 fill-current" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="submit"
+                    size="icon"
+                    variant="ghost"
+                    className="h-9 w-9 rounded-xl hover:bg-accent hover:text-accent-foreground hover:scale-110 transition-all duration-150 ease disabled:opacity-50 disabled:hover:scale-100"
+                    disabled={!input.trim()}
+                  >
+                    <SendIcon className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </form>

@@ -175,29 +175,33 @@ export function Sidebar() {
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-xl border-t border-border safe-area-bottom">
-        <div className="flex overflow-x-auto hide-scrollbar px-1 py-2 gap-0.5">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              pathname === item.href ||
-              (item.href !== "/" && pathname.startsWith(item.href.split("/").slice(0, 2).join("/")));
+        <div className="relative">
+          <div className="flex overflow-x-auto hide-scrollbar px-1 py-2 gap-0.5">
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== "/" && pathname.startsWith(item.href.split("/").slice(0, 2).join("/")));
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex flex-col items-center gap-0.5 min-w-14 px-2 py-1 rounded-lg text-[10px] transition-colors shrink-0",
-                  isActive
-                    ? "text-gold"
-                    : "text-muted-foreground"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                <span className="truncate">{item.label}</span>
-              </Link>
-            );
-          })}
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex flex-col items-center gap-0.5 min-w-14 px-2 py-1 rounded-lg text-[10px] transition-colors shrink-0",
+                    isActive
+                      ? "text-gold"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+          {/* Scroll hint gradient — fades right edge to signal more items */}
+          <div className="absolute right-0 top-0 bottom-0 w-8 pointer-events-none bg-gradient-to-l from-background/95 to-transparent" />
         </div>
       </nav>
     </>

@@ -1,5 +1,6 @@
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { DEFAULT_MODEL, DEFAULT_TEMPERATURE, SUPPORTED_MODELS } from "@/lib/constants";
 import { gateway } from "@/lib/gateway";
 import { getCurrentUser } from "@/lib/session";
@@ -80,17 +81,22 @@ export async function POST(req: NextRequest) {
     onError: (e) => {
       console.error("[API /chat] Error while streaming:", e);
     },
-    onFinish: async ({ usage }) => {
-      // Log token usage to database — non-blocking
-      if (usage) {
+    onFinish: async ({ usage, totalUsage }) => {
+      // Use totalUsage (multi-step aggregate) if available, else fall back to step usage
+      const u = totalUsage ?? usage;
+      console.log("[API /chat] onFinish usage:", JSON.stringify(u));
+
+      // Schedule the DB write via after() so Vercel doesn't kill the function
+      // before the async write completes
+      after(async () => {
         await logTokenUsage({
           userId: user.userId,
           modelId,
-          promptTokens: usage.inputTokens ?? 0,
-          completionTokens: usage.outputTokens ?? 0,
+          promptTokens: u.inputTokens ?? 0,
+          completionTokens: u.outputTokens ?? 0,
           sessionId,
         });
-      }
+      });
     },
   });
 
@@ -98,3 +104,4 @@ export async function POST(req: NextRequest) {
     sendReasoning: true,
   });
 }
+
