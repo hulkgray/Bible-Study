@@ -147,9 +147,6 @@ export const lookupStrongs = tool({
  * Look up a term in BOTH the Bible dictionary (Easton's) and
  * Webster's 1828 dictionary in parallel.
  * Returns results from both sources for comprehensive definitions.
- *
- * NOTE: Easton's headwords are known to be truncated by 1-2 chars
- * in the DB, so we use ILIKE with a prefix match to compensate.
  */
 export const lookupDictionary = tool({
   description:
@@ -165,16 +162,12 @@ export const lookupDictionary = tool({
     try {
       const sql = getDbClient();
 
-      // Query BOTH dictionaries in parallel
-      // Easton's uses prefix match because headwords are truncated in DB
+      // Query BOTH dictionaries in parallel for comprehensive results
       const [eastonRows, websterRows] = await Promise.all([
         sql`
           SELECT headword, definition
           FROM dictionary_entries
-          WHERE headword ILIKE ${term + '%'}
-             OR definition ILIKE ${'%' + term + '%'}
-          ORDER BY
-            CASE WHEN headword ILIKE ${term + '%'} THEN 0 ELSE 1 END
+          WHERE headword ILIKE ${term}
           LIMIT 3
         `,
         sql`
