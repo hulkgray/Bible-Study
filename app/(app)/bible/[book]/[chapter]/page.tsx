@@ -1,11 +1,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { BIBLE_BOOKS, TRANSLATIONS } from "@/lib/bible-books";
-import { useState } from "react";
-import { ChevronLeft, ChevronRight, Bookmark, Copy, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronLeft, ChevronRight, Bookmark, Copy, Check, Info, X, Languages } from "lucide-react";
 import { cn } from "@/lib/utils";
+import DOMPurify from "isomorphic-dompurify";
+import { StrongsVerse } from "@/components/strongs-verse";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => r.json()).then((res) => res.data ?? res);
@@ -18,6 +20,19 @@ export default function BibleReaderPage() {
 
   const [selectedTranslations, setSelectedTranslations] = useState(["kjv"]);
   const [copiedVerse, setCopiedVerse] = useState<number | null>(null);
+  const [showItalicInfo, setShowItalicInfo] = useState(false);
+  const [interlinearMode, setInterlinearMode] = useState(false);
+
+  // Check if italic info banner has been dismissed
+  useEffect(() => {
+    const dismissed = localStorage.getItem("bible-italic-info-dismissed");
+    if (!dismissed) setShowItalicInfo(true);
+  }, []);
+
+  const dismissItalicInfo = () => {
+    setShowItalicInfo(false);
+    localStorage.setItem("bible-italic-info-dismissed", "true");
+  };
 
   const bookInfo = BIBLE_BOOKS.find((b) => b.slug === bookSlug);
 
@@ -29,6 +44,51 @@ export default function BibleReaderPage() {
     fetcher,
     { revalidateOnFocus: true, dedupingInterval: 5000 }
   );
+
+  // Bookmarks for this chapter
+  const bookmarkKey = bookInfo
+    ? `/api/bookmarks?book_number=${bookInfo.bookNumber}&chapter=${chapterNum}`
+    : null;
+  const { data: bookmarkData } = useSWR(bookmarkKey, fetcher, {
+    revalidateOnFocus: true,
+    dedupingInterval: 2000,
+  });
+
+  // Set of bookmarked verse numbers for quick lookup
+  const bookmarkedVerses = new Set<number>(
+    (bookmarkData ?? []).map((b: { verse: number }) => b.verse)
+  );
+
+  const handleToggleBookmark = async (verseNum: number) => {
+    if (!bookInfo) return;
+
+    // Optimistic update
+    const isCurrentlyBookmarked = bookmarkedVerses.has(verseNum);
+    const optimisticData = isCurrentlyBookmarked
+      ? (bookmarkData ?? []).filter((b: { verse: number }) => b.verse !== verseNum)
+      : [...(bookmarkData ?? []), { verse: verseNum, book: bookInfo.name, chapter: chapterNum }];
+
+    mutate(bookmarkKey, optimisticData, false);
+
+    try {
+      await fetch("/api/bookmarks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          book: bookInfo.name,
+          bookNumber: bookInfo.bookNumber,
+          chapter: chapterNum,
+          verse: verseNum,
+          translationCode: selectedTranslations[0],
+        }),
+      });
+      // Revalidate to sync with server
+      mutate(bookmarkKey);
+    } catch {
+      // Rollback on error
+      mutate(bookmarkKey);
+    }
+  };
 
   const handleCopyVerse = async (verseNum: number, text: string) => {
     const ref = `${bookInfo?.name} ${chapterNum}:${verseNum}`;
@@ -88,7 +148,7 @@ export default function BibleReaderPage() {
       </div>
 
       {/* Translation selector */}
-      <div className="flex flex-wrap gap-2 mb-6 animate-slide-up">
+      <div className="flex flex-wrap items-center gap-2 mb-4 animate-slide-up">
         {TRANSLATIONS.map((t) => (
           <button
             key={t.code}
@@ -111,7 +171,51 @@ export default function BibleReaderPage() {
             {t.abbreviation}
           </button>
         ))}
+        {/* Italic info tooltip */}
+        <button
+          onClick={() => setShowItalicInfo(true)}
+          className="p-1.5 rounded-lg hover:bg-accent/50 transition-colors text-muted-foreground hover:text-gold"
+          title="About italicized words"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+
+        {/* Interlinear mode toggle — only when KJV is selected */}
+        {selectedTranslations.includes("kjv") && (
+          <button
+            onClick={() => setInterlinearMode((prev) => !prev)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200 ml-auto",
+              interlinearMode
+                ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                : "bg-muted border-transparent text-muted-foreground hover:border-border"
+            )}
+            title="Toggle Strong's numbers (Hebrew & Greek)"
+          >
+            <Languages className="h-3.5 w-3.5" />
+            Strong&apos;s
+          </button>
+        )}
       </div>
+
+      {/* Italic words explanation banner */}
+      {showItalicInfo && (
+        <div className="flex items-start gap-3 mb-4 p-3 rounded-xl bg-gold/5 border border-gold/15 text-sm animate-fade-in">
+          <Info className="h-4 w-4 text-gold shrink-0 mt-0.5" />
+          <p className="text-foreground/80 font-scripture text-sm leading-relaxed flex-1">
+            Words shown in <em className="text-gold/80">italics</em> were added by translators for clarity and
+            do not appear in the original Hebrew or Greek manuscripts. This is a standard convention
+            in the King James Version and other formal translations.
+          </p>
+          <button
+            onClick={dismissItalicInfo}
+            className="p-1 rounded-md hover:bg-accent/50 transition-colors shrink-0"
+            title="Dismiss"
+          >
+            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      )}
 
       {/* Verses */}
       {isLoading && (
@@ -135,7 +239,7 @@ export default function BibleReaderPage() {
         <div className="space-y-1">
           {data.verses.map(
             (
-              v: { verse: number; translations: Record<string, string> },
+              v: { verse: number; translations: Record<string, string>; taggedText: string | null },
               i: number
             ) => (
               <div
@@ -148,29 +252,45 @@ export default function BibleReaderPage() {
                   {v.verse}
                 </span>
 
-                {/* Verse text */}
+                {/* Verse text — render HTML (italic tags) safely via DOMPurify */}
                 <div className="flex-1 space-y-2">
-                  {selectedTranslations.map((tc) => (
-                    <p
-                      key={tc}
-                      className={cn(
-                        "font-scripture text-base leading-relaxed",
-                        selectedTranslations.length > 1 &&
-                          "border-l-2 border-gold/20 pl-3"
-                      )}
-                    >
-                      {selectedTranslations.length > 1 && (
-                        <span className="text-gold/50 text-xs font-sans font-medium mr-2 uppercase">
-                          {tc}
-                        </span>
-                      )}
-                      {v.translations[tc] || (
-                        <span className="text-muted-foreground italic text-sm">
-                          Not available
-                        </span>
-                      )}
-                    </p>
-                  ))}
+                {selectedTranslations.map((tc) => {
+                    const verseText = v.translations[tc];
+                    const taggedText = v.taggedText as string | null;
+                    const useInterlinear = interlinearMode && tc === "kjv" && taggedText;
+
+                    return (
+                      <p
+                        key={tc}
+                        className={cn(
+                          "font-scripture text-base leading-relaxed verse-text",
+                          selectedTranslations.length > 1 &&
+                            "border-l-2 border-gold/20 pl-3"
+                        )}
+                      >
+                        {selectedTranslations.length > 1 && (
+                          <span className="text-gold/50 text-xs font-sans font-medium mr-2 uppercase">
+                            {tc}
+                          </span>
+                        )}
+                        {useInterlinear ? (
+                          <StrongsVerse taggedText={taggedText} />
+                        ) : verseText ? (
+                          <span
+                            dangerouslySetInnerHTML={{
+                              __html: DOMPurify.sanitize(verseText, {
+                                ALLOWED_TAGS: ["i", "em", "b", "strong"],
+                              }),
+                            }}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground italic text-sm">
+                            Not available
+                          </span>
+                        )}
+                      </p>
+                    );
+                  })}
                 </div>
 
                 {/* Actions */}
@@ -192,10 +312,18 @@ export default function BibleReaderPage() {
                     )}
                   </button>
                   <button
+                    onClick={() => handleToggleBookmark(v.verse)}
                     className="p-1.5 rounded-md hover:bg-muted transition-colors"
-                    title="Bookmark verse"
+                    title={bookmarkedVerses.has(v.verse) ? "Remove bookmark" : "Bookmark verse"}
                   >
-                    <Bookmark className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Bookmark
+                      className={cn(
+                        "h-3.5 w-3.5 transition-colors",
+                        bookmarkedVerses.has(v.verse)
+                          ? "text-gold fill-gold"
+                          : "text-muted-foreground"
+                      )}
+                    />
                   </button>
                 </div>
               </div>

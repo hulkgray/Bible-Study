@@ -7,6 +7,20 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- ============================================
+-- USERS
+-- ============================================
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(320) NOT NULL UNIQUE,
+  name VARCHAR(200) NOT NULL,
+  password_hash TEXT NOT NULL,
+  profile_picture_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- ============================================
 -- BIBLE TEXT
 -- ============================================
 CREATE TABLE IF NOT EXISTS bible_verses (
@@ -17,11 +31,29 @@ CREATE TABLE IF NOT EXISTS bible_verses (
   verse SMALLINT NOT NULL,
   translation_code VARCHAR(10) NOT NULL,
   text TEXT NOT NULL,
+  tagged_text TEXT,  -- Inline Strong's tags e.g. "In the beginning[H7225] God[H430]..."
   UNIQUE(book_number, chapter, verse, translation_code)
 );
 
 CREATE INDEX IF NOT EXISTS idx_verses_lookup ON bible_verses(book_number, chapter, translation_code);
 CREATE INDEX IF NOT EXISTS idx_verses_fulltext ON bible_verses USING GIN(to_tsvector('english', text));
+
+-- ============================================
+-- BOOKMARKS
+-- ============================================
+CREATE TABLE IF NOT EXISTS bookmarks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  book TEXT NOT NULL,
+  book_number INT NOT NULL,
+  chapter INT NOT NULL,
+  verse INT NOT NULL,
+  translation_code VARCHAR(10) NOT NULL DEFAULT 'kjv',
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(book_number, chapter, verse, translation_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookmarks_lookup ON bookmarks(book_number, chapter);
 
 -- ============================================
 -- STRONG'S CONCORDANCES

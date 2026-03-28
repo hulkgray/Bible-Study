@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Languages, Search as SearchIcon } from "lucide-react";
+import { Languages, Search as SearchIcon, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VerseLinks } from "@/components/verse-links";
+import Link from "next/link";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -127,9 +129,20 @@ export default function StrongsPage() {
             <span className="text-xs text-muted-foreground uppercase tracking-wide">
               Definition
             </span>
-            <p className="font-scripture text-sm leading-relaxed mt-1 text-foreground/90">
-              {entry.definition}
-            </p>
+            <div className="font-scripture text-sm leading-relaxed mt-1 text-foreground/90">
+              <VerseLinks text={entry.definition} />
+            </div>
+          </div>
+
+          {/* Find in Bible link */}
+          <div className="mt-4 pt-4 border-t border-border">
+            <Link
+              href={`/bible/genesis/1`}
+              className="inline-flex items-center gap-2 text-sm text-gold hover:text-gold/80 transition-colors"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Find uses in Bible
+            </Link>
           </div>
         </div>
       )}

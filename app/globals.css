@@ -136,6 +136,13 @@
     font-family: var(--font-scripture), Georgia, "Times New Roman", serif;
   }
 
+  /* Italic words in KJV = translator-added, dimmer styling */
+  .verse-text i,
+  .verse-text em {
+    color: oklch(0.78 0.14 75 / 0.7);
+    font-style: italic;
+  }
+
   /* Hide scrollbar while keeping functionality */
   .hide-scrollbar {
     scrollbar-width: none;
@@ -144,6 +151,25 @@
   
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Strong's interlinear markers */
+  .strongs-marker {
+    font-size: 0.55em;
+    vertical-align: super;
+    color: oklch(0.72 0.12 85);
+    opacity: 0.4;
+    cursor: pointer;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    font-family: ui-monospace, monospace;
+    padding: 0 1px;
+    line-height: 1;
+    border: none;
+    background: none;
+  }
+  .strongs-marker:hover {
+    opacity: 1;
+    color: oklch(0.82 0.16 85);
   }
 }
 

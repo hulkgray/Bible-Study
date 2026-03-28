@@ -1,12 +1,16 @@
 "use client";
 
 import useSWR from "swr";
-import { Calendar, BookOpen } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Calendar, BookOpen, MessageSquare } from "lucide-react";
+import { VerseLinks } from "@/components/verse-links";
+import { Button } from "@/components/ui/button";
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => r.json()).then((res) => res.data ?? res);
 
 export default function DevotionalPage() {
+  const router = useRouter();
   const { data, isLoading } = useSWR("/api/devotional/today", fetcher, {
     revalidateOnFocus: true,
     dedupingInterval: 5000,
@@ -68,17 +72,41 @@ export default function DevotionalPage() {
             </h2>
           )}
           {data.scriptureRef && (
-            <p className="text-gold text-sm font-medium mb-6 flex items-center gap-1.5">
+            <div
+              className="text-gold text-sm font-medium mb-6 flex items-center gap-1.5"
+            >
               <BookOpen className="h-3.5 w-3.5" />
-              {data.scriptureRef}
-            </p>
+              <VerseLinks text={data.scriptureRef.trim()} />
+            </div>
           )}
           <div className="font-scripture text-base leading-relaxed text-foreground/85 whitespace-pre-line">
-            {data.content}
+            <VerseLinks text={data.content} />
           </div>
           <p className="text-sm text-muted-foreground mt-6 pt-4 border-t border-border">
             — {data.bookAuthor ?? "Charles H. Spurgeon"}
           </p>
+          <Button
+            onClick={() => {
+              const prompt = `Expand on today's daily devotional from Faith's Checkbook by Spurgeon and provide a deeper Bible study:
+
+Title: ${data.title ?? ""}
+Scripture: ${data.scriptureRef?.trim() ?? ""}
+
+"${data.content}"
+
+Please:
+1. Explain the Scripture passage in its original context
+2. Highlight key theological themes Spurgeon draws out
+3. Provide additional cross-references that deepen the theme
+4. Offer a practical application for today`;
+              router.push(`/study?prompt=${encodeURIComponent(prompt)}`);
+            }}
+            className="w-full mt-4 bg-gold/10 hover:bg-gold/20 text-gold border border-gold/20 hover:border-gold/40 transition-all"
+            variant="outline"
+          >
+            <MessageSquare className="h-4 w-4 mr-2" />
+            Study with AI ✦
+          </Button>
         </div>
       )}
     </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import useSWR from "swr";
 import {
   BookOpen,
   Search,
@@ -14,14 +15,23 @@ import {
   Home,
   ChevronLeft,
   ChevronRight,
+  LogIn,
+  LogOut,
+  User,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+const fetcher = (url: string) =>
+  fetch(url).then((r) => {
+    if (!r.ok) throw new Error("Not authenticated");
+    return r.json();
+  }).then((res) => res.data);
+
 const NAV_ITEMS = [
   { href: "/", label: "Home", icon: Home },
-  { href: "/bible/genesis/1", label: "Bible", icon: BookOpen },
+  { href: "/bible", label: "Bible", icon: BookOpen },
   { href: "/search", label: "Search", icon: Search },
   { href: "/strongs", label: "Strong's", icon: Languages },
   { href: "/dictionary", label: "Dictionary", icon: BookText },
@@ -33,7 +43,21 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+
+  // Check auth state via SWR (silent fail for non-auth pages)
+  const { data: user, mutate: mutateUser } = useSWR("/api/auth/me", fetcher, {
+    revalidateOnFocus: true,
+    dedupingInterval: 5000,
+    errorRetryCount: 0,
+  });
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    mutateUser(null, false);
+    router.push("/");
+  }
 
   return (
     <>
@@ -89,8 +113,43 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Footer */}
+        {/* Footer — User + Theme + Collapse */}
         <div className="p-2 border-t border-border space-y-1">
+          {/* User section */}
+          {user ? (
+            <div className={cn(
+              "flex items-center gap-2 px-2 py-2",
+              collapsed && "justify-center"
+            )}>
+              <div className="h-7 w-7 rounded-full bg-gold/20 flex items-center justify-center shrink-0">
+                <User className="h-3.5 w-3.5 text-gold" />
+              </div>
+              {!collapsed && (
+                <div className="flex-1 min-w-0 animate-fade-in">
+                  <p className="text-xs font-medium truncate">{user.name}</p>
+                  <button
+                    onClick={handleLogout}
+                    className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors flex items-center gap-1"
+                  >
+                    <LogOut className="h-2.5 w-2.5" /> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-all",
+                collapsed && "justify-center px-2"
+              )}
+              title={collapsed ? "Sign in" : undefined}
+            >
+              <LogIn className="h-4 w-4 shrink-0" />
+              {!collapsed && <span className="animate-fade-in">Sign In</span>}
+            </Link>
+          )}
+
           <div className={cn("flex items-center", collapsed ? "justify-center" : "px-2 justify-between")}>
             {!collapsed && <ThemeToggle />}
             <button

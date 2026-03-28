@@ -1,39 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbClient } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
+import { updateNoteSchema } from "@/lib/validations/notes";
 import { z } from "zod";
 
 const paramsSchema = z.object({
   id: z.string().uuid(),
 });
 
-const updateNoteSchema = z.object({
-  title: z.string().min(1).max(500).optional(),
-  content: z.any().optional(),
-  folderId: z.string().uuid().nullable().optional(),
-  color: z.string().max(20).optional(),
-  pinned: z.boolean().optional(),
-  links: z.array(z.object({
-    type: z.enum(["verse", "dictionary", "strongs", "library", "devotional"]),
-    ref: z.string(),
-    href: z.string(),
-  })).optional(),
-});
-
 /**
- * GET /api/notes/[id] — Get a single note
+ * GET /api/notes/[id] — Get a single note (user-scoped)
  */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const sql = getDbClient();
 
     const rows = await sql`
       SELECT id, title, content, folder_id, color, pinned, links, created_at, updated_at
       FROM study_notes
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${user.userId}
     `;
 
     if (rows.length === 0) {
@@ -62,13 +56,18 @@ export async function GET(
 }
 
 /**
- * PATCH /api/notes/[id] — Update a note
+ * PATCH /api/notes/[id] — Update a note (user-scoped)
  */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const body = await request.json();
     const result = updateNoteSchema.safeParse(body);
@@ -83,7 +82,6 @@ export async function PATCH(
     const sql = getDbClient();
     const { title, content, folderId, color, pinned, links } = result.data;
 
-    // Build dynamic update — only set provided fields
     const rows = await sql`
       UPDATE study_notes
       SET
@@ -94,7 +92,7 @@ export async function PATCH(
         pinned = COALESCE(${pinned ?? null}, pinned),
         links = COALESCE(${links ? JSON.stringify(links) : null}::jsonb, links),
         updated_at = now()
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${user.userId}
       RETURNING id, title, content, folder_id, color, pinned, links, created_at, updated_at
     `;
 
@@ -124,17 +122,22 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/notes/[id] — Delete a note
+ * DELETE /api/notes/[id] — Delete a note (user-scoped)
  */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const sql = getDbClient();
 
-    const result = await sql`DELETE FROM study_notes WHERE id = ${id} RETURNING id`;
+    const result = await sql`DELETE FROM study_notes WHERE id = ${id} AND user_id = ${user.userId} RETURNING id`;
 
     if (result.length === 0) {
       return NextResponse.json({ error: "Note not found" }, { status: 404 });

@@ -1,22 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbClient } from "@/lib/db";
-import { z } from "zod";
-
-const createSessionSchema = z.object({
-  title: z.string().max(500).optional().default("New Conversation"),
-  modelId: z.string().max(100).optional().default("anthropic/claude-opus-4.6"),
-});
+import { getCurrentUser } from "@/lib/session";
+import { createChatSessionSchema } from "@/lib/validations/chat";
 
 /**
- * GET /api/chat/sessions — List all chat sessions (most recent first)
+ * GET /api/chat/sessions — List chat sessions for the authenticated user
  */
 export async function GET() {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const sql = getDbClient();
     const sessions = await sql`
       SELECT s.id, s.title, s.model_id, s.created_at, s.updated_at,
              (SELECT COUNT(*) FROM chat_messages WHERE session_id = s.id) as message_count
       FROM chat_sessions s
+      WHERE s.user_id = ${user.userId}
       ORDER BY s.updated_at DESC
       LIMIT 50
     `;
@@ -38,12 +40,17 @@ export async function GET() {
 }
 
 /**
- * POST /api/chat/sessions — Create a new chat session
+ * POST /api/chat/sessions — Create a new chat session for the authenticated user
  */
 export async function POST(request: NextRequest) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
-    const result = createSessionSchema.safeParse(body);
+    const result = createChatSessionSchema.safeParse(body);
 
     if (!result.success) {
       return NextResponse.json(
@@ -56,12 +63,14 @@ export async function POST(request: NextRequest) {
     const sql = getDbClient();
 
     const rows = await sql`
-      INSERT INTO chat_sessions (title, model_id)
-      VALUES (${title}, ${modelId})
+      INSERT INTO chat_sessions (user_id, title, model_id)
+      VALUES (${user.userId}, ${title}, ${modelId})
       RETURNING id, title, model_id, created_at, updated_at
     `;
 
     const s = rows[0];
+    console.log(`[API /chat/sessions] Created session: id=${s.id}, user=${user.userId}`);
+
     return NextResponse.json({
       data: {
         id: s.id,

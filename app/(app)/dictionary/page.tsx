@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { BookText, Search as SearchIcon } from "lucide-react";
+import { VerseLinks } from "@/components/verse-links";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -86,9 +87,9 @@ export default function DictionaryPage() {
                 <h3 className="text-gold font-semibold text-lg mb-2">
                   {entry.headword}
                 </h3>
-                <p className="font-scripture text-sm leading-relaxed text-foreground/85 line-clamp-6">
-                  {entry.definition}
-                </p>
+                <div className="font-scripture text-sm leading-relaxed text-foreground/85">
+                  <VerseLinks text={entry.definition} />
+                </div>
               </div>
             )
           )}

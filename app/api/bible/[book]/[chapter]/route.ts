@@ -58,7 +58,7 @@ export async function GET(
 
     // Fetch all verses for this chapter across requested translations
     const rows = await sql`
-      SELECT verse, translation_code, text
+      SELECT verse, translation_code, text, tagged_text
       FROM bible_verses
       WHERE book_number = ${bookInfo.bookNumber}
         AND chapter = ${chapterNum}
@@ -68,21 +68,27 @@ export async function GET(
 
     // Group by verse number into parallel format
     const versesMap = new Map<number, Record<string, string>>();
+    const taggedMap = new Map<number, string | null>();
     for (const row of rows) {
       const v = row.verse as number;
       if (!versesMap.has(v)) {
         versesMap.set(v, {});
       }
       versesMap.get(v)![row.translation_code as string] = row.text as string;
+      // Store tagged_text for KJV only
+      if (row.translation_code === "kjv" && row.tagged_text) {
+        taggedMap.set(v, row.tagged_text as string);
+      }
     }
 
-    const verses: ParallelVerse[] = Array.from(versesMap.entries())
+    const verses = Array.from(versesMap.entries())
       .sort(([a], [b]) => a - b)
       .map(([verseNum, translationTexts]) => ({
         book: bookInfo.name,
         chapter: chapterNum,
         verse: verseNum,
         translations: translationTexts,
+        taggedText: taggedMap.get(verseNum) ?? null,
       }));
 
     return NextResponse.json({

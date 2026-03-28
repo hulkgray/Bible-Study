@@ -141,50 +141,77 @@ function chunkPages(pages: string[], pagesPerChapter: number = 5): { title: stri
 
 /**
  * Parse Faith's Checkbook into daily devotional entries.
- * The PDF has 365 entries, roughly one per page.
+ * The PDF contains date headers like "January 1 - Title" throughout the text.
+ * We combine all pages and split by these date markers.
  */
 function parseDevotional(pages: string[]): { month: number; day: number; title: string; scriptureRef: string; content: string }[] {
   const entries: { month: number; day: number; title: string; scriptureRef: string; content: string }[] = [];
   const MONTHS = ["January", "February", "March", "April", "May", "June",
     "July", "August", "September", "October", "November", "December"];
-  const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-  // Simple distribution: assign pages to days sequentially
-  let dayOfYear = 0;
-  for (const pageText of pages) {
-    if (!pageText.trim()) continue;
+  // Combine all pages into one text block
+  const fullText = pages.join(" ");
 
-    dayOfYear++;
-    let month = 0;
-    let dayAccum = 0;
-    for (let m = 0; m < 12; m++) {
-      if (dayOfYear <= dayAccum + DAYS_IN_MONTH[m]) {
-        month = m + 1;
-        break;
-      }
-      dayAccum += DAYS_IN_MONTH[m];
+  // Build regex to match date headers: "January 1 -", "February 14 -", etc.
+  const monthPattern = MONTHS.join("|");
+  const dateHeaderRegex = new RegExp(`((?:${monthPattern})\\s+\\d{1,2})\\s*[-–—]\\s*`, "g");
+
+  // Find all date header positions
+  const matches: { index: number; month: number; day: number; fullMatch: string }[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = dateHeaderRegex.exec(fullText)) !== null) {
+    const dateStr = match[1]; // e.g., "January 1"
+    const parts = dateStr.match(/(\w+)\s+(\d+)/);
+    if (!parts) continue;
+    const monthIdx = MONTHS.indexOf(parts[1]);
+    const day = parseInt(parts[2], 10);
+    if (monthIdx === -1 || day < 1 || day > 31) continue;
+    matches.push({
+      index: match.index,
+      month: monthIdx + 1,
+      day,
+      fullMatch: match[0],
+    });
+  }
+
+  console.log(`[ETL] Found ${matches.length} date headers in devotional text`);
+
+  // Extract content between consecutive date headers
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i];
+    const contentStart = current.index + current.fullMatch.length;
+    const contentEnd = i + 1 < matches.length ? matches[i + 1].index : fullText.length;
+    let content = fullText.substring(contentStart, contentEnd).trim();
+
+    // Extract title (text before the first quote mark or scripture reference)
+    let title = `${MONTHS[current.month - 1]} ${current.day}`;
+    const titleMatch = content.match(/^([^"""\n]+?)(?:\s*[""""]|$)/);
+    if (titleMatch && titleMatch[1].trim().length > 3 && titleMatch[1].trim().length < 80) {
+      title = titleMatch[1].trim();
     }
-    const day = dayOfYear - dayAccum;
 
-    if (month === 0 || day <= 0 || dayOfYear > 366) continue;
-
-    // Try to extract a scripture reference from the first line
-    const lines = pageText.split(/(?:\. |\n)/).filter(Boolean);
+    // Extract scripture reference
     let scriptureRef = "";
-    let title = `${MONTHS[month - 1]} ${day}`;
-    const content = pageText.trim();
-
-    // Look for scripture pattern in first 200 chars
-    const refMatch = content.substring(0, 200).match(/([1-3]?\s?[A-Z][a-z]+\.?\s+\d+:\d+(?:-\d+)?)/);
+    const refMatch = content.substring(0, 300).match(/([1-3]?\s?[A-Z][a-z]+\.?\s+\d+:\d+(?:-\d+)?)/);
     if (refMatch) {
       scriptureRef = refMatch[1];
     }
 
-    entries.push({ month, day, title, scriptureRef, content });
+    // Skip very short entries (likely fragments)
+    if (content.length < 50) continue;
+
+    entries.push({
+      month: current.month,
+      day: current.day,
+      title,
+      scriptureRef,
+      content,
+    });
   }
 
   return entries;
 }
+
 
 /**
  * Parse the Puritan Catechism into Q&A entries.
@@ -252,7 +279,10 @@ async function seed() {
     console.log(`[ETL] Book ID: ${bookId}`);
 
     if (book.bookType === "devotional") {
-      // Parse as daily devotional
+      // Parse as daily devotional — delete existing to replace misaligned data
+      await sql`DELETE FROM devotional_entries WHERE book_id = ${bookId}`;
+      console.log(`[ETL] Cleared existing devotional entries for re-import`);
+
       const entries = parseDevotional(pages);
       console.log(`[ETL] Parsed ${entries.length} devotional entries`);
 
@@ -264,7 +294,10 @@ async function seed() {
             sql`
               INSERT INTO devotional_entries (id, book_id, month, day, title, scripture_ref, content)
               VALUES (gen_random_uuid(), ${bookId}, ${e.month}, ${e.day}, ${e.title}, ${e.scriptureRef}, ${e.content})
-              ON CONFLICT (book_id, month, day) DO NOTHING
+              ON CONFLICT (book_id, month, day) DO UPDATE SET
+                title = EXCLUDED.title,
+                scripture_ref = EXCLUDED.scripture_ref,
+                content = EXCLUDED.content
             `
           )
         );

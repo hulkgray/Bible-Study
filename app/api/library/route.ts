@@ -11,9 +11,18 @@ export async function GET() {
     const sql = getDbClient();
 
     const rows = await sql`
-      SELECT id, slug, title, author, book_type, description
+      SELECT id, slug, title, author, book_type, description, category, source_url
       FROM library_books
-      ORDER BY title
+      ORDER BY 
+        CASE book_type
+          WHEN 'book' THEN 1
+          WHEN 'devotional' THEN 2
+          WHEN 'catechism' THEN 3
+          WHEN 'prayers' THEN 4
+          WHEN 'apocrypha' THEN 5
+          ELSE 6
+        END,
+        title
     `;
 
     return NextResponse.json({
@@ -24,6 +33,8 @@ export async function GET() {
         author: r.author,
         bookType: r.book_type,
         description: r.description,
+        category: r.category ?? "theology",
+        sourceUrl: r.source_url,
       })),
     });
   } catch (error) {

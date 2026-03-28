@@ -1,7 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ModelSelector } from "@/components/model-selector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,7 @@ import {
   Check,
   Pencil,
   ClipboardCopy,
+  BookOpenText,
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { DEFAULT_MODEL } from "@/lib/constants";
@@ -28,8 +29,75 @@ import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
 import useSWR, { mutate } from "swr";
+import Link from "next/link";
+import { parseCitations, extractSourceFooter } from "@/lib/citation-parser";
+import { PromptLibrary } from "@/components/prompt-library";
+import { remarkCitations } from "@/lib/remark-citations";
+import { CitationTooltip } from "@/components/citation-tooltip";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+/**
+ * Custom link renderer for Streamdown — detects citation links
+ * and wraps them in CitationTooltip for verse hover previews.
+ */
+function CitationLink({ href, title, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
+  // Check if this is a citation link (marked by our remark plugin)
+  const isCitation = title && title.startsWith("citation:");
+  const citationType = isCitation ? title.replace("citation:", "") : null;
+
+  if (isCitation && citationType === "verse" && href) {
+    // Parse: /bible/genesis/1
+    const parts = href.split("/");
+    const bookSlug = parts[2] || "";
+    const chapter = parseInt(parts[3] || "1", 10);
+    const displayText = typeof children === "string" ? children : String(children);
+    const verseMatch = displayText.match(/(\d+):(\d+)(?:\s*[-–]\s*(\d+))?$/);
+    const verse = verseMatch ? parseInt(verseMatch[2], 10) : 1;
+    const endVerse = verseMatch?.[3] ? parseInt(verseMatch[3], 10) : undefined;
+
+    return (
+      <CitationTooltip
+        bookSlug={bookSlug}
+        chapter={chapter}
+        verse={verse}
+        endVerse={endVerse}
+        href={href}
+      >
+        {children}
+      </CitationTooltip>
+    );
+  }
+
+  if (isCitation && citationType === "strongs" && href) {
+    return (
+      <Link
+        href={href}
+        className="font-mono text-xs px-1.5 py-0.5 rounded bg-gold/10 text-gold hover:bg-gold/20 transition-colors"
+      >
+        {children}
+      </Link>
+    );
+  }
+
+  if (isCitation && citationType === "dictionary" && href) {
+    return (
+      <Link
+        href={href}
+        className="text-gold hover:text-gold/80 underline decoration-dotted decoration-gold/30 hover:decoration-gold/60 transition-colors"
+      >
+        {children}
+      </Link>
+    );
+  }
+
+  // Regular markdown link — render as standard anchor
+  return (
+    <a href={href} title={title} className="text-gold hover:underline" target="_blank" rel="noopener noreferrer" {...props}>
+      {children}
+    </a>
+  );
+}
 
 // ============================================
 // Reasoning Block — collapsible thinking animation
@@ -191,11 +259,11 @@ function ChatHistorySidebar({
         ) : (
           sessions.map(
             (s: { id: string; title: string; updatedAt: string; messageCount: number }) => (
-              <button
+              <div
                 key={s.id}
                 onClick={() => onSelectSession(s.id)}
                 className={cn(
-                  "group w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors text-xs",
+                  "group w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors text-xs cursor-pointer",
                   activeSessionId === s.id
                     ? "bg-gold/10 text-gold"
                     : "hover:bg-muted text-foreground/80"
@@ -213,7 +281,7 @@ function ChatHistorySidebar({
                 >
                   <Trash2 className="h-3 w-3 text-muted-foreground hover:text-red-400" />
                 </button>
-              </button>
+              </div>
             )
           )
         )}
@@ -229,8 +297,11 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
   const [input, setInput] = useState("");
   const [currentModelId, setCurrentModelId] = useState(modelId);
   const [showHistory, setShowHistory] = useState(false);
+  const [showPromptLibrary, setShowPromptLibrary] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+  const autoSentRef = useRef(false);
 
   const handleModelIdChange = (newModelId: string) => {
     setCurrentModelId(newModelId);
@@ -248,6 +319,18 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-send prompt from URL (?prompt=...) — used by devotional "Study with AI"
+  useEffect(() => {
+    const promptParam = searchParams.get("prompt");
+    if (promptParam && !autoSentRef.current && status === "ready" && messages.length === 0) {
+      autoSentRef.current = true;
+      sendMessage(
+        { text: promptParam },
+        { body: { modelId: currentModelId } }
+      );
+    }
+  }, [searchParams, status, messages.length, sendMessage, currentModelId]);
 
   // Auto-save chat when a response finishes
   useEffect(() => {
@@ -388,7 +471,23 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
         >
           <History className="h-4 w-4" />
         </Button>
+        <Button
+          onClick={() => setShowPromptLibrary(true)}
+          variant="outline"
+          size="icon"
+          className="h-9 w-9 shadow-border-small hover:shadow-border-medium bg-background/80 backdrop-blur-sm border-0 hover:bg-background hover:scale-[1.02] transition-all duration-150 ease"
+          title="Prompt Library"
+        >
+          <BookOpenText className="h-4 w-4" />
+        </Button>
       </div>
+
+      {/* Prompt Library Modal */}
+      <PromptLibrary
+        isOpen={showPromptLibrary}
+        onClose={() => setShowPromptLibrary(false)}
+        onSelectPrompt={(template) => setInput(template)}
+      />
 
       {/* Empty state */}
       {!hasMessages && (
@@ -492,6 +591,8 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                               isStreaming &&
                               m.id === messages[messages.length - 1]?.id
                             }
+                            remarkPlugins={[remarkCitations]}
+                            components={{ a: CitationLink }}
                           >
                             {part.text}
                           </Streamdown>
@@ -539,6 +640,34 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                       </button>
                     </div>
                   )}
+
+                  {/* Citation sources footer */}
+                  {m.role === "assistant" && !isStreaming && (() => {
+                    const tp = m.parts.find((p) => p.type === "text");
+                    if (!tp || !("text" in tp)) return null;
+                    const citations = parseCitations(tp.text);
+                    if (citations.length === 0) return null;
+                    const sources = extractSourceFooter(citations);
+                    return (
+                      <div className="mt-2 pt-2 border-t border-border/20">
+                        <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">
+                          Sources Referenced
+                        </span>
+                        <div className="flex flex-wrap gap-1.5 mt-1.5">
+                          {sources.map((s, si) => (
+                            <Link
+                              key={si}
+                              href={s.href}
+                              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-gold/5 text-gold/80 hover:bg-gold/10 hover:text-gold border border-gold/10 transition-colors"
+                            >
+                              <span>{s.type}</span>
+                              <span>{s.display}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* User message — edit button */}
                   {m.role === "user" && !isStreaming && (

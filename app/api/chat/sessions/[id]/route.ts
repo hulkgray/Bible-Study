@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbClient } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 import { z } from "zod";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
@@ -13,19 +14,24 @@ const saveMessagesSchema = z.object({
 });
 
 /**
- * GET /api/chat/sessions/[id] — Get a session with all its messages
+ * GET /api/chat/sessions/[id] — Get a session with all its messages (user-scoped)
  */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const sql = getDbClient();
 
     const session = await sql`
       SELECT id, title, model_id, created_at, updated_at
-      FROM chat_sessions WHERE id = ${id}
+      FROM chat_sessions WHERE id = ${id} AND user_id = ${user.userId}
     `;
 
     if (session.length === 0) {
@@ -63,13 +69,18 @@ export async function GET(
 }
 
 /**
- * POST /api/chat/sessions/[id] — Save messages to a session (append)
+ * POST /api/chat/sessions/[id] — Save messages to a session (user-scoped)
  */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const body = await request.json();
     const result = saveMessagesSchema.safeParse(body);
@@ -83,6 +94,12 @@ export async function POST(
 
     const sql = getDbClient();
 
+    // Verify session belongs to user (defense-in-depth)
+    const sessionCheck = await sql`SELECT id FROM chat_sessions WHERE id = ${id} AND user_id = ${user.userId}`;
+    if (sessionCheck.length === 0) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
     // Insert messages
     for (const msg of result.data.messages) {
       await sql`
@@ -94,15 +111,15 @@ export async function POST(
     // Update session timestamp + auto-title from first user message
     const firstUserMsg = result.data.messages.find((m) => m.role === "user");
     if (firstUserMsg) {
-      const existingTitle = await sql`SELECT title FROM chat_sessions WHERE id = ${id}`;
+      const existingTitle = await sql`SELECT title FROM chat_sessions WHERE id = ${id} AND user_id = ${user.userId}`;
       if (existingTitle[0]?.title === "New Conversation") {
         const autoTitle = firstUserMsg.content.substring(0, 80);
-        await sql`UPDATE chat_sessions SET title = ${autoTitle}, updated_at = now() WHERE id = ${id}`;
+        await sql`UPDATE chat_sessions SET title = ${autoTitle}, updated_at = now() WHERE id = ${id} AND user_id = ${user.userId}`;
       } else {
-        await sql`UPDATE chat_sessions SET updated_at = now() WHERE id = ${id}`;
+        await sql`UPDATE chat_sessions SET updated_at = now() WHERE id = ${id} AND user_id = ${user.userId}`;
       }
     } else {
-      await sql`UPDATE chat_sessions SET updated_at = now() WHERE id = ${id}`;
+      await sql`UPDATE chat_sessions SET updated_at = now() WHERE id = ${id} AND user_id = ${user.userId}`;
     }
 
     return NextResponse.json({ data: { saved: true } });
@@ -113,16 +130,21 @@ export async function POST(
 }
 
 /**
- * DELETE /api/chat/sessions/[id] — Delete a session and all its messages
+ * DELETE /api/chat/sessions/[id] — Delete a session (user-scoped, CASCADE deletes messages)
  */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const sql = getDbClient();
-    const result = await sql`DELETE FROM chat_sessions WHERE id = ${id} RETURNING id`;
+    const result = await sql`DELETE FROM chat_sessions WHERE id = ${id} AND user_id = ${user.userId} RETURNING id`;
     if (result.length === 0) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 });
     }
