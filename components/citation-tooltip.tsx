@@ -2,6 +2,7 @@
 
 import React from "react";
 import useSWR from "swr";
+import DOMPurify from "dompurify";
 import { SmartTooltip } from "@/components/ui/smart-tooltip";
 
 const fetcher = (url: string) =>
@@ -92,9 +93,9 @@ function CitationTooltipInner({
       {verseTexts.length > 0 ? (
         <div className="space-y-1.5 max-h-60 overflow-y-auto hide-scrollbar">
           {verseTexts.map((v) => (
-            <p key={v.verse} className="text-sm text-foreground/80 leading-relaxed">
+            <p key={v.verse} className="text-sm text-foreground/80 leading-relaxed verse-text">
               <span className="text-gold/60 font-mono text-xs mr-1.5">{v.verse}</span>
-              {v.text}
+              <span dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(v.text, { ALLOWED_TAGS: ['i', 'em', 'b', 'strong'] }) }} />
             </p>
           ))}
         </div>
