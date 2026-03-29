@@ -8,7 +8,7 @@ import { aiRateLimit } from "@/lib/rate-limit";
 import { logTokenUsage } from "@/lib/ai-usage";
 import { bibleStudyTools } from "@/lib/ai-tools";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 /**
  * Bible Study AI system prompt.
@@ -80,13 +80,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const modelMessages = await convertToModelMessages(messages);
+
   const result = streamText({
     model: gateway(modelId),
     system: SYSTEM_PROMPT,
     temperature: DEFAULT_TEMPERATURE,
-    messages: convertToModelMessages(messages),
+    messages: modelMessages,
     tools: bibleStudyTools,
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(10),
     onError: (e) => {
       console.error("[API /chat] Error while streaming:", e);
     },

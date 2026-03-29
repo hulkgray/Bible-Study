@@ -10,8 +10,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/gateway": "2.0.27",
-    "@ai-sdk/react": "2.0.123",
+    "@ai-sdk/gateway": "^3.0.83",
+    "@ai-sdk/react": "^3.0.143",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-select": "^2.2.2",
     "@radix-ui/react-slot": "^1.2.0",
@@ -28,7 +28,9 @@
     "@tiptap/starter-kit": "^3.21.0",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
-    "ai": "5.0.121",
+    "@workflow/ai": "^4.1.0-beta.58",
+    "@workflow/next": "^4.0.1-beta.69",
+    "ai": "^6.0.141",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -46,6 +48,7 @@
     "swr": "^2.4.1",
     "tailwind-merge": "^3.2.0",
     "tw-animate-css": "^1.2.8",
+    "workflow": "^4.2.0-beta.73",
     "zod": "^4.3.5"
   },
   "devDependencies": {

@@ -293,3 +293,73 @@
     }
   }
 }
+
+/* ── Tooltip prose: compact markdown styling for SmartTooltip popups ── */
+.tooltip-prose {
+  font-size: 0.8125rem; /* 13px */
+  line-height: 1.55;
+  color: var(--foreground);
+  opacity: 0.85;
+}
+
+.tooltip-prose p {
+  margin: 0.35em 0;
+}
+
+.tooltip-prose p:first-child {
+  margin-top: 0;
+}
+
+.tooltip-prose p:last-child {
+  margin-bottom: 0;
+}
+
+.tooltip-prose strong,
+.tooltip-prose b {
+  font-weight: 600;
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.tooltip-prose em,
+.tooltip-prose i {
+  color: var(--foreground);
+  opacity: 0.75;
+}
+
+.tooltip-prose a {
+  color: var(--gold);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--gold) 40%, transparent);
+  transition: text-decoration-color 0.15s;
+}
+
+.tooltip-prose a:hover {
+  text-decoration-color: var(--gold);
+}
+
+.tooltip-prose ul,
+.tooltip-prose ol {
+  padding-left: 1.2em;
+  margin: 0.3em 0;
+}
+
+.tooltip-prose li {
+  margin: 0.15em 0;
+}
+
+.tooltip-prose code {
+  font-size: 0.75rem;
+  padding: 0.15em 0.35em;
+  border-radius: 0.25em;
+  background: var(--muted);
+}
+
+.tooltip-prose blockquote {
+  border-left: 2px solid var(--gold);
+  padding-left: 0.75em;
+  margin: 0.4em 0;
+  color: var(--foreground);
+  opacity: 0.7;
+  font-style: italic;
+}

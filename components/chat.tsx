@@ -35,6 +35,8 @@ import { parseCitations, extractSourceFooter } from "@/lib/citation-parser";
 import { PromptLibrary } from "@/components/prompt-library";
 import { remarkCitations } from "@/lib/remark-citations";
 import { CitationTooltip } from "@/components/citation-tooltip";
+import { StrongsTooltip } from "@/components/strongs-tooltip";
+import { DictionaryTooltip } from "@/components/dictionary-tooltip";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -71,24 +73,26 @@ function CitationLink({ href, title, children, ...props }: React.AnchorHTMLAttri
   }
 
   if (isCitation && citationType === "strongs" && href) {
+    // Extract Strong's number from the href: /strongs?q=H430 → H430
+    const qMatch = href.match(/[?&]q=([^&]+)/);
+    const strongsNum = qMatch ? decodeURIComponent(qMatch[1]) : String(children);
+
     return (
-      <Link
-        href={href}
-        className="font-mono text-xs px-1.5 py-0.5 rounded bg-gold/10 text-gold hover:bg-gold/20 transition-colors"
-      >
+      <StrongsTooltip strongsNumber={strongsNum} href={href}>
         {children}
-      </Link>
+      </StrongsTooltip>
     );
   }
 
   if (isCitation && citationType === "dictionary" && href) {
+    // Extract term from href: /dictionary?q=Covenant → Covenant
+    const qMatch = href.match(/[?&]q=([^&]+)/);
+    const term = qMatch ? decodeURIComponent(qMatch[1]) : String(children);
+
     return (
-      <Link
-        href={href}
-        className="text-gold hover:text-gold/80 underline decoration-dotted decoration-gold/30 hover:decoration-gold/60 transition-colors"
-      >
+      <DictionaryTooltip term={term} href={href}>
         {children}
-      </Link>
+      </DictionaryTooltip>
     );
   }
 
