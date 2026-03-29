@@ -130,6 +130,77 @@ export async function POST(
 }
 
 /**
+ * PUT /api/chat/sessions/[id] — Upsert full conversation (replace all messages)
+ * Uses ON CONFLICT (session_id, sequence_number) for efficient upsert.
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = paramsSchema.parse(await params);
+    const body = await request.json();
+    const result = saveMessagesSchema.safeParse(body);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: "Validation failed", details: result.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+
+    const sql = getDbClient();
+
+    // Verify session belongs to user (defense-in-depth)
+    const sessionCheck = await sql`SELECT id FROM chat_sessions WHERE id = ${id} AND user_id = ${user.userId}`;
+    if (sessionCheck.length === 0) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
+
+    // Delete messages beyond the new count (handles conversation edits/trims)
+    await sql`
+      DELETE FROM chat_messages
+      WHERE session_id = ${id} AND sequence_number >= ${result.data.messages.length}
+    `;
+
+    // Upsert each message by sequence_number
+    for (let i = 0; i < result.data.messages.length; i++) {
+      const msg = result.data.messages[i];
+      await sql`
+        INSERT INTO chat_messages (session_id, sequence_number, role, content, reasoning)
+        VALUES (${id}, ${i}, ${msg.role}, ${msg.content}, ${msg.reasoning ?? null})
+        ON CONFLICT (session_id, sequence_number)
+        DO UPDATE SET content = EXCLUDED.content, reasoning = EXCLUDED.reasoning
+      `;
+    }
+
+    // Update session timestamp + auto-title from first user message
+    const firstUserMsg = result.data.messages.find((m) => m.role === "user");
+    if (firstUserMsg) {
+      const existingTitle = await sql`SELECT title FROM chat_sessions WHERE id = ${id} AND user_id = ${user.userId}`;
+      if (existingTitle[0]?.title === "New Conversation") {
+        const autoTitle = firstUserMsg.content.substring(0, 80);
+        await sql`UPDATE chat_sessions SET title = ${autoTitle}, updated_at = now() WHERE id = ${id} AND user_id = ${user.userId}`;
+      } else {
+        await sql`UPDATE chat_sessions SET updated_at = now() WHERE id = ${id} AND user_id = ${user.userId}`;
+      }
+    } else {
+      await sql`UPDATE chat_sessions SET updated_at = now() WHERE id = ${id} AND user_id = ${user.userId}`;
+    }
+
+    return NextResponse.json({ data: { saved: true } });
+  } catch (error) {
+    console.error("[API /chat/sessions/[id]] PUT error:", error);
+    return NextResponse.json({ error: "Failed to save messages" }, { status: 500 });
+  }
+}
+
+/**
  * DELETE /api/chat/sessions/[id] — Delete a session (user-scoped, CASCADE deletes messages)
  */
 export async function DELETE(

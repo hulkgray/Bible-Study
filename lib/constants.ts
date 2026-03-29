@@ -2,7 +2,8 @@
  * Model configuration for the Bible Study AI agent.
  *
  * Temperature 0.3 — accurate theological responses.
- * Models chosen from top 5 providers (March 2026, latest flagships).
+ * Models chosen from top 4 providers (March 2026, latest flagships).
+ * Specs verified against Vercel AI Gateway: https://vercel.com/ai-gateway/models
  */
 
 /** Default model — best balance of quality, speed, and cost */
@@ -12,7 +13,7 @@ export const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
 export const DEFAULT_TEMPERATURE = 0.3;
 
 /**
- * Supported models across 5 top providers.
+ * Supported models across 4 top providers.
  * Format: provider/model-id (Vercel AI Gateway convention)
  */
 export const SUPPORTED_MODELS = [
@@ -22,19 +23,31 @@ export const SUPPORTED_MODELS = [
   "anthropic/claude-haiku-4.5",
 
   // Google — multilingual + long-doc mastery
-  "google/gemini-3.1-pro",
+  "google/gemini-3.1-pro-preview",
   "google/gemini-3-flash",
 
   // OpenAI — strong general knowledge
   "openai/gpt-5-mini",
-  "openai/gpt-5-nano",
+  "openai/gpt-5.4-nano",
 
-  // xAI — strong reasoning, alternative perspective
-  "xai/grok-4.20-beta",
-
-  // Meta — open-source powerhouse (via Gateway)
-  "meta/llama-4-maverick",
+  // xAI — 2M context, deep reasoning
+  "xai/grok-4.20-reasoning",
 ];
+
+/**
+ * Maximum output tokens per model — sourced from Vercel AI Gateway (March 2026).
+ * Used by the chat route to set maxOutputTokens dynamically per-model.
+ */
+export const MAX_OUTPUT_TOKENS: Record<string, number> = {
+  "anthropic/claude-opus-4.6":       128_000,
+  "anthropic/claude-sonnet-4.6":     128_000,
+  "anthropic/claude-haiku-4.5":       64_000,
+  "google/gemini-3.1-pro-preview":    65_536,
+  "google/gemini-3-flash":            65_536,
+  "openai/gpt-5-mini":              128_000,
+  "openai/gpt-5.4-nano":            128_000,
+  "xai/grok-4.20-reasoning":      2_000_000,
+};
 
 /**
  * Model metadata for the UI dropdown
@@ -61,7 +74,7 @@ export const MODEL_INFO: Record<
     tier: "fast",
     description: "Lightning-fast responses",
   },
-  "google/gemini-3.1-pro": {
+  "google/gemini-3.1-pro-preview": {
     label: "Gemini 3.1 Pro",
     provider: "Google",
     tier: "flagship",
@@ -79,22 +92,16 @@ export const MODEL_INFO: Record<
     tier: "balanced",
     description: "Strong Bible knowledge, affordable",
   },
-  "openai/gpt-5-nano": {
-    label: "GPT-5 Nano",
+  "openai/gpt-5.4-nano": {
+    label: "GPT-5.4 Nano",
     provider: "OpenAI",
     tier: "fast",
     description: "Quick answers, lowest cost",
   },
-  "xai/grok-4.20-beta": {
-    label: "Grok 4.20",
+  "xai/grok-4.20-reasoning": {
+    label: "Grok 4.20 Reasoning",
     provider: "xAI",
     tier: "flagship",
-    description: "Strong reasoning, unique perspective",
-  },
-  "meta/llama-4-maverick": {
-    label: "Llama 4 Maverick",
-    provider: "Meta",
-    tier: "balanced",
-    description: "Open-source MoE powerhouse",
+    description: "2M tokens, deep reasoning powerhouse",
   },
 };

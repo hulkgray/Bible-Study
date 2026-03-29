@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ModelSelector } from "@/components/model-selector";
 import { Button } from "@/components/ui/button";
@@ -312,7 +313,9 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
     setCurrentModelId(newModelId);
   };
 
-  const { messages, error, sendMessage, regenerate, setMessages, stop, status } = useChat();
+  const { messages, error, sendMessage, regenerate, setMessages, stop, status } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
+  });
 
   const hasMessages = messages.length > 0;
   const isStreaming = status === "streaming";
@@ -363,20 +366,21 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
       }
       if (!sid) return;
 
-      // Save last 2 messages (the latest user + assistant pair)
-      const lastTwo = messages.slice(-2);
-      const payload = lastTwo.map((m) => {
-        const textPart = m.parts.find((p) => p.type === "text");
-        const reasoningPart = m.parts.find((p) => p.type === "reasoning");
+      // Save ALL messages — concatenate multi-part text and reasoning
+      const payload = messages.map((m) => {
+        const textParts = m.parts.filter((p) => p.type === "text");
+        const reasoningParts = m.parts.filter((p) => p.type === "reasoning");
         return {
           role: m.role,
-          content: textPart && "text" in textPart ? textPart.text : "",
-          reasoning: reasoningPart && "text" in reasoningPart ? reasoningPart.text : null,
+          content: textParts.map((p) => ("text" in p ? p.text : "")).join("\n"),
+          reasoning:
+            reasoningParts.map((p) => ("text" in p ? p.text : "")).join("\n") || null,
         };
       });
 
+      // PUT for full-conversation upsert (not POST append)
       await fetch(`/api/chat/sessions/${sid}`, {
-        method: "POST",
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: payload }),
       });

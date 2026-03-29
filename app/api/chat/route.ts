@@ -1,14 +1,21 @@
 import { convertToModelMessages, streamText, stepCountIs, type UIMessage } from "ai";
 import { NextRequest } from "next/server";
 import { after } from "next/server";
-import { DEFAULT_MODEL, DEFAULT_TEMPERATURE, SUPPORTED_MODELS } from "@/lib/constants";
+import { z } from "zod";
+import { DEFAULT_MODEL, DEFAULT_TEMPERATURE, SUPPORTED_MODELS, MAX_OUTPUT_TOKENS } from "@/lib/constants";
 import { gateway } from "@/lib/gateway";
 import { getCurrentUser } from "@/lib/session";
 import { aiRateLimit } from "@/lib/rate-limit";
 import { logTokenUsage } from "@/lib/ai-usage";
 import { bibleStudyTools } from "@/lib/ai-tools";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
+
+const chatBodySchema = z.object({
+  messages: z.array(z.any()),
+  modelId: z.string().max(100).optional().default(DEFAULT_MODEL),
+  sessionId: z.string().uuid().optional(),
+});
 
 /**
  * Bible Study AI system prompt.
@@ -67,11 +74,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const {
-    messages,
-    modelId = DEFAULT_MODEL,
-    sessionId,
-  }: { messages: UIMessage[]; modelId: string; sessionId?: string } = await req.json();
+  const body = await req.json();
+  const validation = chatBodySchema.safeParse(body);
+  if (!validation.success) {
+    return new Response(
+      JSON.stringify({ error: "Validation failed", details: validation.error.flatten().fieldErrors }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  const { messages, modelId, sessionId } = validation.data;
 
   if (!SUPPORTED_MODELS.includes(modelId)) {
     return new Response(
@@ -86,6 +97,7 @@ export async function POST(req: NextRequest) {
     model: gateway(modelId),
     system: SYSTEM_PROMPT,
     temperature: DEFAULT_TEMPERATURE,
+    maxOutputTokens: MAX_OUTPUT_TOKENS[modelId],
     messages: modelMessages,
     tools: bibleStudyTools,
     stopWhen: stepCountIs(10),
