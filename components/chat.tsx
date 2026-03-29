@@ -5,7 +5,6 @@ import { DefaultChatTransport } from "ai";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ModelSelector } from "@/components/model-selector";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   SendIcon,
   Square,
@@ -30,6 +29,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
+import remarkGfm from "remark-gfm";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
 import { parseCitations, extractSourceFooter } from "@/lib/citation-parser";
@@ -367,23 +367,43 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
       if (!sid) return;
 
       // Save ALL messages — concatenate multi-part text and reasoning
-      const payload = messages.map((m) => {
-        const textParts = m.parts.filter((p) => p.type === "text");
-        const reasoningParts = m.parts.filter((p) => p.type === "reasoning");
-        return {
-          role: m.role,
-          content: textParts.map((p) => ("text" in p ? p.text : "")).join("\n"),
-          reasoning:
-            reasoningParts.map((p) => ("text" in p ? p.text : "")).join("\n") || null,
-        };
-      });
+      // Filter to only user + assistant messages (skip tool messages)
+      const payload = messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => {
+          // Extract text parts — be defensive: ensure p.type is exactly "text"
+          const textContent = m.parts
+            .filter((p): p is { type: "text"; text: string } => p.type === "text" && typeof (p as { text?: string }).text === "string")
+            .map((p) => p.text)
+            .filter((t) => t.length > 0)
+            .join("\n");
+
+          const reasoningContent = m.parts
+            .filter((p): p is { type: "reasoning"; text: string } => p.type === "reasoning" && typeof (p as { text?: string }).text === "string")
+            .map((p) => p.text)
+            .filter((t) => t.length > 0)
+            .join("\n");
+
+          // Debug: log what we're saving per-message
+          console.debug(`[Chat Save] role=${m.role}, parts=${m.parts.length}, textLen=${textContent.length}, reasoningLen=${reasoningContent.length}, partTypes=[${m.parts.map(p => p.type).join(',')}]`);
+
+          return {
+            role: m.role,
+            content: textContent,
+            reasoning: reasoningContent || null,
+          };
+        });
 
       // PUT for full-conversation upsert (not POST append)
-      await fetch(`/api/chat/sessions/${sid}`, {
+      const putRes = await fetch(`/api/chat/sessions/${sid}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: payload }),
       });
+
+      if (!putRes.ok) {
+        console.error("[Chat] PUT failed:", putRes.status, await putRes.text());
+      }
 
       mutate("/api/chat/sessions");
     } catch (err) {
@@ -443,14 +463,18 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
           const res = await fetch(`/api/chat/sessions/${id}`);
           const data = await res.json();
           if (data.data?.messages) {
-            const uiMessages = data.data.messages.map((m: { id: string; role: string; content: string; reasoning: string | null }) => ({
-              id: m.id,
-              role: m.role,
-              parts: [
-                ...(m.reasoning ? [{ type: "reasoning" as const, reasoning: m.reasoning }] : []),
-                { type: "text" as const, text: m.content },
-              ],
-            }));
+            const uiMessages = data.data.messages
+              .filter((m: { role: string }) => m.role === "user" || m.role === "assistant")
+              .map((m: { id: string; role: string; content: string; reasoning: string | null }) => ({
+                id: m.id,
+                role: m.role,
+                parts: [
+                  // Reasoning part uses 'text' field (AI SDK v6 ReasoningUIPart format)
+                  ...(m.reasoning ? [{ type: "reasoning" as const, text: m.reasoning }] : []),
+                  { type: "text" as const, text: m.content || "" },
+                ],
+              }));
+            console.debug("[Chat Load] Loaded messages:", uiMessages.map((m: { role: string; parts: { type: string; text?: string }[] }) => ({ role: m.role, parts: m.parts.length, textLen: m.parts.find(p => p.type === 'text')?.text?.length || 0 })));
             setMessages(uiMessages);
             setSessionId(id);
             setCurrentModelId(data.data.modelId);
@@ -524,26 +548,36 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                   setInput("");
                 }}
               >
-                <div className="flex items-center gap-2 md:gap-3 p-3 md:p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
+                <div className="flex items-end gap-2 md:gap-3 p-3 md:p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
                   <ModelSelectorHandler
                     modelId={modelId}
                     onModelIdChange={handleModelIdChange}
                   />
-                  <div className="flex flex-1 items-center">
-                    <Input
+                  <div className="flex flex-1 items-end">
+                    <textarea
                       name="prompt"
                       placeholder="What does Genesis 1:1 mean in the original Hebrew?"
-                      onChange={(e) => setInput(e.target.value)}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        // Auto-resize
+                        e.target.style.height = 'auto';
+                        e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+                      }}
                       value={input}
                       autoFocus
-                      className="flex-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base placeholder:text-muted-foreground/60"
+                      rows={1}
+                      className="flex-1 border-0 bg-transparent focus-visible:outline-none text-base placeholder:text-muted-foreground/60 resize-none min-h-[36px] max-h-[200px] py-2"
                       onKeyDown={(e) => {
-                        if (e.metaKey && e.key === "Enter") {
-                          sendMessage(
-                            { text: input },
-                            { body: { modelId: currentModelId } }
-                          );
-                          setInput("");
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (input.trim()) {
+                            sendMessage(
+                              { text: input },
+                              { body: { modelId: currentModelId } }
+                            );
+                            setInput('');
+                            e.currentTarget.style.height = 'auto';
+                          }
                         }
                       }}
                     />
@@ -585,6 +619,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
               {messages.map((m, msgIdx) => (
                 <div
                   key={m.id}
+                  data-chat-message={m.role}
                   className={cn(
                     m.role === "user" &&
                       "bg-foreground text-background rounded-2xl p-3 md:p-4 ml-auto max-w-[90%] md:max-w-[75%] shadow-border-small font-medium text-sm md:text-base",
@@ -613,7 +648,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                               isStreaming &&
                               m.id === messages[messages.length - 1]?.id
                             }
-                            remarkPlugins={[remarkCitations]}
+                            remarkPlugins={[remarkGfm, remarkCitations]}
                             components={{ a: CitationLink }}
                           >
                             {part.text}
@@ -787,25 +822,35 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
             }}
             className="px-4 md:px-8 pb-6 md:pb-8"
           >
-            <div className="flex items-center gap-3 p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
+            <div className="flex items-end gap-3 p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
               <ModelSelectorHandler
                 modelId={modelId}
                 onModelIdChange={handleModelIdChange}
               />
-              <div className="flex flex-1 items-center">
-                <Input
+              <div className="flex flex-1 items-end">
+                <textarea
                   name="prompt"
                   placeholder="Ask a follow-up question..."
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    // Auto-resize
+                    e.target.style.height = 'auto';
+                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
+                  }}
                   value={input}
-                  className="flex-1 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-base placeholder:text-muted-foreground/60 font-medium"
+                  rows={1}
+                  className="flex-1 border-0 bg-transparent focus-visible:outline-none text-base placeholder:text-muted-foreground/60 font-medium resize-none min-h-[36px] max-h-[200px] py-2"
                   onKeyDown={(e) => {
-                    if (e.metaKey && e.key === "Enter") {
-                      sendMessage(
-                        { text: input },
-                        { body: { modelId: currentModelId } }
-                      );
-                      setInput("");
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim()) {
+                        sendMessage(
+                          { text: input },
+                          { body: { modelId: currentModelId } }
+                        );
+                        setInput('');
+                        e.currentTarget.style.height = 'auto';
+                      }
                     }
                   }}
                 />

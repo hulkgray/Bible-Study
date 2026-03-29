@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Languages, Search as SearchIcon, BookOpen, ArrowRight } from "lucide-react";
@@ -18,7 +18,7 @@ function isStrongsNumber(q: string): boolean {
   return /^[GHgh]\d{1,5}$/.test(q.trim());
 }
 
-export default function StrongsPage() {
+function StrongsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -286,5 +286,22 @@ export default function StrongsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function StrongsPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
+        <div className="animate-pulse p-6 rounded-xl bg-card">
+          <div className="h-6 bg-muted rounded w-1/3 mb-4" />
+          <div className="h-4 bg-muted rounded w-1/2 mb-3" />
+          <div className="h-4 bg-muted rounded w-full mb-2" />
+          <div className="h-4 bg-muted rounded w-4/5" />
+        </div>
+      </div>
+    }>
+      <StrongsContent />
+    </Suspense>
   );
 }

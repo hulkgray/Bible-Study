@@ -31,14 +31,14 @@ const fetcher = (url: string) =>
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/study", label: "AI Study", icon: MessageSquare },
+  { href: "/devotional", label: "Devotional", icon: Calendar },
+  { href: "/notes", label: "Notes", icon: FileText },
   { href: "/bible", label: "Bible", icon: BookOpen },
   { href: "/search", label: "Search", icon: Search },
   { href: "/strongs", label: "Strong's", icon: Languages },
   { href: "/dictionary", label: "Dictionary", icon: BookText },
   { href: "/library", label: "Library", icon: Library },
-  { href: "/notes", label: "Notes", icon: FileText },
-  { href: "/devotional", label: "Devotional", icon: Calendar },
-  { href: "/study", label: "AI Study", icon: MessageSquare },
 ];
 
 export function Sidebar() {
