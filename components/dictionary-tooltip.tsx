@@ -33,8 +33,10 @@ export function DictionaryTooltip({
     { dedupingInterval: 30000, revalidateOnFocus: false }
   );
 
-  const entries = data?.entries ?? (Array.isArray(data) ? data : []);
-  const entry = entries[0];
+  // The API returns { data: [...] } — the SWR fetcher unwraps to [...].
+  // IMPORTANT: Don't use `data?.entries` — Array.prototype.entries is a built-in
+  // method that's truthy, which would prevent the ?? fallback from triggering.
+  const entry = Array.isArray(data) ? data[0] : data?.[0];
 
   const content = entry ? (
     <div className="space-y-2">
