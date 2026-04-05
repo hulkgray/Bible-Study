@@ -297,6 +297,58 @@ function ChatHistorySidebar({
 }
 
 // ============================================
+// Wake Lock Hook — prevents screen from sleeping during AI streaming
+// ============================================
+function useWakeLock(active: boolean) {
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  useEffect(() => {
+    if (!active) {
+      // Release lock when streaming ends
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+      return;
+    }
+
+    // Acquire the wake lock when streaming starts
+    async function acquireLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+          console.debug('[WakeLock] Acquired — screen will stay on during streaming');
+          wakeLockRef.current.addEventListener('release', () => {
+            console.debug('[WakeLock] Released');
+          });
+        }
+      } catch (err) {
+        // Wake Lock can fail if page is not visible or not supported
+        console.debug('[WakeLock] Could not acquire:', err);
+      }
+    }
+
+    acquireLock();
+
+    // Re-acquire if the page becomes visible again (e.g., user switched tabs)
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && active && !wakeLockRef.current) {
+        acquireLock();
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, [active]);
+}
+
+// ============================================
 // Main Chat Component
 // ============================================
 export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
@@ -319,6 +371,9 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
 
   const hasMessages = messages.length > 0;
   const isStreaming = status === "streaming";
+
+  // Keep screen awake while AI is streaming a response
+  useWakeLock(isStreaming);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -624,7 +679,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                     m.role === "user" &&
                       "bg-foreground text-background rounded-2xl p-3 md:p-4 ml-auto max-w-[90%] md:max-w-[75%] shadow-border-small font-medium text-sm md:text-base",
                     m.role === "assistant" &&
-                      "max-w-[95%] md:max-w-[85%] text-foreground/90 leading-relaxed text-sm md:text-base"
+                      "max-w-full md:max-w-[85%] min-w-0 overflow-x-auto text-foreground/90 leading-relaxed text-sm md:text-base"
                   )}
                 >
                   {m.parts.map((part, i) => {
@@ -788,12 +843,12 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
       {/* Error */}
       {error && (
         <div className="max-w-4xl mx-auto w-full px-4 md:px-8 pb-4 animate-slide-down">
-          <Alert variant="destructive" className="flex flex-col items-end">
+          <Alert variant="destructive" className="flex flex-col gap-2">
             <div className="flex flex-row gap-2">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
               <AlertDescription className="dark:text-red-400 text-red-600">
-                An error occurred while generating the response. Please try a
-                different model or check your connection.
+                The response was interrupted — this can happen if your screen turned off
+                or the connection dropped. Tap <strong>Retry</strong> to try again.
               </AlertDescription>
             </div>
             <Button

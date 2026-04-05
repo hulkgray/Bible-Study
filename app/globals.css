@@ -364,17 +364,26 @@
   font-style: italic;
 }
 
+/* ── Chat message overflow containment (mobile) ── */
+[data-chat-message] {
+  overflow-x: auto;
+  overflow-y: visible;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ── Markdown tables in AI chat responses ── */
 [data-chat-message] table,
 .prose table,
 article table {
-  width: 100%;
   border-collapse: collapse;
   margin: 0.75em 0;
   font-size: 0.875rem;
   line-height: 1.5;
-  overflow-x: auto;
   display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 [data-chat-message] thead,
@@ -393,6 +402,32 @@ article th {
   background: var(--muted);
   font-size: 0.8125rem;
   white-space: nowrap;
+}
+
+/* Mobile: allow header wrapping for narrow screens */
+@media (max-width: 640px) {
+  [data-chat-message] th,
+  .prose th,
+  article th {
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.75rem;
+    padding: 0.4em 0.5em;
+  }
+
+  [data-chat-message] td,
+  .prose td,
+  article td {
+    font-size: 0.8125rem;
+    padding: 0.4em 0.5em;
+    word-break: break-word;
+  }
+
+  [data-chat-message] table,
+  .prose table,
+  article table {
+    font-size: 0.8125rem;
+  }
 }
 
 [data-chat-message] td,
