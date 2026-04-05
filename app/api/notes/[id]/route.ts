@@ -89,7 +89,7 @@ export async function PATCH(
       SET
         title = COALESCE(${title ?? null}, title),
         content = COALESCE(${content ? JSON.stringify(content) : null}::jsonb, content),
-        folder_id = ${folderId !== undefined ? folderId : null},
+        folder_id = COALESCE(${folderId !== undefined ? folderId : null}, folder_id),
         color = COALESCE(${color ?? null}, color),
         pinned = COALESCE(${pinned ?? null}, pinned),
         links = COALESCE(${links ? JSON.stringify(links) : null}::jsonb, links),

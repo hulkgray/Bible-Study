@@ -8,6 +8,7 @@ import {
   BookText,
   Library,
   FileText,
+  Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TiptapEditor from "@/components/tiptap-editor";
@@ -111,7 +112,7 @@ export default function PublicNotePage({ params }: { params: Promise<{ slug: str
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Minimal header */}
-      <header className="border-b border-border">
+      <header className="border-b border-border print:hidden">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <Link
             href="/"
@@ -120,6 +121,13 @@ export default function PublicNotePage({ params }: { params: Promise<{ slug: str
             ✦ Bible Study
           </Link>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+              title="Print note"
+            >
+              <Printer className="h-4 w-4" />
+            </button>
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
               {canEdit ? "Shared (editable)" : "Shared (read-only)"}
             </span>
@@ -185,27 +193,29 @@ export default function PublicNotePage({ params }: { params: Promise<{ slug: str
         )}
 
         {/* Content */}
-        <div className="prose-note">
-          {note.content && (note.content as Record<string, unknown>).markdown ? (
-            <MarkdownRenderer
-              content={(note.content as Record<string, unknown>).markdown as string}
-            />
-          ) : canEdit ? (
-            <TiptapEditor
-              content={
-                note.content && Object.keys(note.content).length > 0
-                  ? JSON.stringify(note.content)
-                  : ""
-              }
-              onUpdate={handleContentUpdate}
-              placeholder="Start writing..."
-              className="border-0 rounded-none min-h-[50vh]"
-            />
-          ) : (
-            <div className="text-sm text-muted-foreground italic">
-              This note has no content yet.
-            </div>
-          )}
+        <div className="max-w-3xl mx-auto">
+          <div className="bg-background rounded-xl shadow-border-medium border border-border/50 px-8 md:px-12 py-8 md:py-10 min-h-[50vh] print:shadow-none print:border-0 print:rounded-none">
+            {note.content && (note.content as Record<string, unknown>).markdown ? (
+              <MarkdownRenderer
+                content={(note.content as Record<string, unknown>).markdown as string}
+              />
+            ) : canEdit ? (
+              <TiptapEditor
+                content={
+                  note.content && Object.keys(note.content).length > 0
+                    ? JSON.stringify(note.content)
+                    : ""
+                }
+                onUpdate={handleContentUpdate}
+                placeholder="Start writing..."
+                className="border-0 rounded-none min-h-[50vh]"
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground italic">
+                This note has no content yet.
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>

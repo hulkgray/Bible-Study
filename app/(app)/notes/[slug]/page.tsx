@@ -18,6 +18,7 @@ import {
   Lock,
   Pencil,
   X,
+  Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TiptapEditor from "@/components/tiptap-editor";
@@ -183,7 +184,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
   return (
     <div className="h-full flex flex-col">
       {/* Editor header */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3 print:hidden">
         <button
           onClick={() => router.push("/notes")}
           className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
@@ -317,6 +318,15 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
             )}
           </div>
 
+          {/* Print */}
+          <button
+            onClick={() => window.print()}
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted transition-colors"
+            title="Print note"
+          >
+            <Printer className="h-4 w-4" />
+          </button>
+
           {/* Delete */}
           <button
             onClick={() => {
@@ -332,7 +342,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
 
       {/* Linked resources */}
       {note.links && note.links.length > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/20 flex-wrap">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/20 flex-wrap print:hidden">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
             Linked:
           </span>
@@ -355,26 +365,28 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
         </div>
       )}
 
-      {/* Note content — markdown renderer for AI exports, Tiptap for manual notes */}
-      <div className="flex-1 overflow-y-auto">
-        {note.content && (note.content as Record<string, unknown>).markdown ? (
-          <div className="px-6 py-4 prose-note">
-            <MarkdownRenderer
-              content={(note.content as Record<string, unknown>).markdown as string}
+      {/* Note content — page-view layout with constrained width */}
+      <div className="flex-1 overflow-y-auto bg-muted/20 print:bg-white">
+        <div className="max-w-3xl mx-auto my-6 md:my-10 bg-background rounded-xl shadow-border-medium border border-border/50 min-h-[70vh] print:shadow-none print:border-0 print:my-0 print:rounded-none">
+          {note.content && (note.content as Record<string, unknown>).markdown ? (
+            <div className="px-8 md:px-12 py-8 md:py-10 prose-note">
+              <MarkdownRenderer
+                content={(note.content as Record<string, unknown>).markdown as string}
+              />
+            </div>
+          ) : (
+            <TiptapEditor
+              content={
+                note.content && Object.keys(note.content).length > 0
+                  ? JSON.stringify(note.content)
+                  : ""
+              }
+              onUpdate={handleContentUpdate}
+              placeholder="Start writing your study notes..."
+              className="border-0 rounded-none min-h-[60vh] px-8 md:px-12 py-8 md:py-10"
             />
-          </div>
-        ) : (
-          <TiptapEditor
-            content={
-              note.content && Object.keys(note.content).length > 0
-                ? JSON.stringify(note.content)
-                : ""
-            }
-            onUpdate={handleContentUpdate}
-            placeholder="Start writing your study notes..."
-            className="border-0 rounded-none min-h-full"
-          />
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

@@ -450,3 +450,47 @@ article tr:last-child td {
 article tbody tr:hover {
   background: var(--accent);
 }
+
+/* ── Print styles ── */
+@media print {
+  /* Hide sidebar, toolbars, and non-content UI */
+  aside,
+  nav,
+  [data-sidebar],
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Make main content fill the page */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Clean page layout */
+  .print\\:bg-white {
+    background: white !important;
+  }
+
+  .print\\:shadow-none {
+    box-shadow: none !important;
+  }
+
+  .print\\:border-0 {
+    border: 0 !important;
+  }
+
+  .print\\:my-0 {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .print\\:rounded-none {
+    border-radius: 0 !important;
+  }
+}
