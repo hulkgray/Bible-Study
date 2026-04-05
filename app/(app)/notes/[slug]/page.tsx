@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TiptapEditor from "@/components/tiptap-editor";
-import { MarkdownRenderer } from "@/components/markdown-renderer";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -368,24 +367,29 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
       {/* Note content — page-view layout with constrained width */}
       <div className="flex-1 overflow-y-auto bg-muted/20 print:bg-white">
         <div className="max-w-3xl mx-auto my-6 md:my-10 bg-background rounded-xl shadow-border-medium border border-border/50 min-h-[70vh] print:shadow-none print:border-0 print:my-0 print:rounded-none">
-          {note.content && (note.content as Record<string, unknown>).markdown ? (
-            <div className="px-8 md:px-12 py-8 md:py-10 prose-note">
-              <MarkdownRenderer
-                content={(note.content as Record<string, unknown>).markdown as string}
-              />
-            </div>
-          ) : (
-            <TiptapEditor
-              content={
-                note.content && Object.keys(note.content).length > 0
-                  ? JSON.stringify(note.content)
-                  : ""
+          <TiptapEditor
+            content={(() => {
+              if (!note.content || Object.keys(note.content).length === 0) return "";
+              // If content has a markdown field (AI export), convert to Tiptap JSON
+              const c = note.content as Record<string, unknown>;
+              if (c.markdown && typeof c.markdown === "string") {
+                // Convert markdown paragraphs to Tiptap doc structure
+                const paragraphs = (c.markdown as string).split(/\n\n+/).filter(Boolean);
+                const tiptapDoc = {
+                  type: "doc",
+                  content: paragraphs.map((p) => ({
+                    type: "paragraph",
+                    content: [{ type: "text", text: p.replace(/\n/g, " ") }],
+                  })),
+                };
+                return JSON.stringify(tiptapDoc);
               }
-              onUpdate={handleContentUpdate}
-              placeholder="Start writing your study notes..."
-              className="border-0 rounded-none min-h-[60vh] px-8 md:px-12 py-8 md:py-10"
-            />
-          )}
+              return JSON.stringify(note.content);
+            })()}
+            onUpdate={handleContentUpdate}
+            placeholder="Start writing your study notes..."
+            className="border-0 rounded-none min-h-[60vh] px-8 md:px-12 py-8 md:py-10"
+          />
         </div>
       </div>
     </div>

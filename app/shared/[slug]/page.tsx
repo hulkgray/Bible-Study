@@ -195,25 +195,44 @@ export default function PublicNotePage({ params }: { params: Promise<{ slug: str
         {/* Content */}
         <div className="max-w-3xl mx-auto">
           <div className="bg-background rounded-xl shadow-border-medium border border-border/50 px-8 md:px-12 py-8 md:py-10 min-h-[50vh] print:shadow-none print:border-0 print:rounded-none">
-            {note.content && (note.content as Record<string, unknown>).markdown ? (
+            {canEdit ? (
+              <TiptapEditor
+                content={(() => {
+                  if (!note.content || Object.keys(note.content).length === 0) return "";
+                  const c = note.content as Record<string, unknown>;
+                  if (c.markdown && typeof c.markdown === "string") {
+                    const paragraphs = (c.markdown as string).split(/\n\n+/).filter(Boolean);
+                    const tiptapDoc = {
+                      type: "doc",
+                      content: paragraphs.map((p) => ({
+                        type: "paragraph",
+                        content: [{ type: "text", text: p.replace(/\n/g, " ") }],
+                      })),
+                    };
+                    return JSON.stringify(tiptapDoc);
+                  }
+                  return JSON.stringify(note.content);
+                })()}
+                onUpdate={handleContentUpdate}
+                placeholder="Start writing..."
+                className="border-0 rounded-none min-h-[50vh]"
+              />
+            ) : note.content && (note.content as Record<string, unknown>).markdown ? (
               <MarkdownRenderer
                 content={(note.content as Record<string, unknown>).markdown as string}
               />
-            ) : canEdit ? (
+            ) : (
               <TiptapEditor
                 content={
                   note.content && Object.keys(note.content).length > 0
                     ? JSON.stringify(note.content)
                     : ""
                 }
-                onUpdate={handleContentUpdate}
-                placeholder="Start writing..."
+                onUpdate={() => {}}
+                placeholder=""
                 className="border-0 rounded-none min-h-[50vh]"
+                editable={false}
               />
-            ) : (
-              <div className="text-sm text-muted-foreground italic">
-                This note has no content yet.
-              </div>
             )}
           </div>
         </div>
