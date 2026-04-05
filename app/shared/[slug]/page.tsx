@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TiptapEditor from "@/components/tiptap-editor";
-import { markdownToHtml } from "@/lib/markdown-to-html";
 import Link from "next/link";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -200,12 +199,12 @@ export default function PublicNotePage({ params }: { params: Promise<{ slug: str
               const isMarkdown = c?.markdown && typeof c.markdown === "string";
               return (
                 <TiptapEditor
-                  content={isMarkdown ? markdownToHtml(c.markdown as string) : (
+                  content={isMarkdown ? (c.markdown as string) : (
                     note.content && Object.keys(note.content).length > 0
                       ? JSON.stringify(note.content)
                       : ""
                   )}
-                  contentType={isMarkdown ? "html" : "json"}
+                  contentType={isMarkdown ? "markdown" : "json"}
                   onUpdate={canEdit ? handleContentUpdate : () => {}}
                   placeholder={canEdit ? "Start writing..." : ""}
                   className="border-0 rounded-none min-h-[50vh]"

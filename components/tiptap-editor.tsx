@@ -7,6 +7,7 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
+import { Markdown } from "@tiptap/markdown";
 import { cn } from "@/lib/utils";
 import {
   Bold,
@@ -37,8 +38,8 @@ interface TiptapEditorProps {
   placeholder?: string;
   className?: string;
   editable?: boolean;
-  /** 'json' (default) = Tiptap JSON string, 'html' = HTML string */
-  contentType?: "json" | "html";
+  /** 'json' (default) or 'markdown' — uses Tiptap's native markdown parser */
+  contentType?: "json" | "markdown";
 }
 
 export default function TiptapEditor({
@@ -49,17 +50,6 @@ export default function TiptapEditor({
   editable = true,
   contentType = "json",
 }: TiptapEditorProps) {
-  /** Parse the content prop based on contentType */
-  const parseContent = useCallback((raw: string) => {
-    if (!raw) return undefined;
-    if (contentType === "html") return raw; // Tiptap natively accepts HTML strings
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return undefined;
-    }
-  }, [contentType]);
-
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -89,8 +79,10 @@ export default function TiptapEditor({
       TextAlign.configure({
         types: ["heading", "paragraph"],
       }),
+      Markdown,
     ],
-    content: parseContent(content),
+    content: contentType === "markdown" ? content : (content ? JSON.parse(content) : undefined),
+    contentType: contentType === "markdown" ? "markdown" : undefined,
     editable,
     editorProps: {
       attributes: {
@@ -117,22 +109,23 @@ export default function TiptapEditor({
   // Re-initialize content when prop changes (i.e., switching notes)
   useEffect(() => {
     if (editor && content) {
-      const parsed = parseContent(content);
-      if (parsed) {
-        // For JSON, compare to avoid unnecessary re-renders
-        if (contentType === "json") {
+      if (contentType === "markdown") {
+        editor.commands.setContent(content, false, { contentType: "markdown" });
+      } else {
+        try {
+          const parsed = JSON.parse(content);
           const currentJSON = JSON.stringify(editor.getJSON());
           if (content !== currentJSON) {
             editor.commands.setContent(parsed);
           }
-        } else {
-          editor.commands.setContent(parsed);
+        } catch {
+          // ignore parse errors
         }
       }
     } else if (editor && !content) {
       editor.commands.clearContent();
     }
-  }, [editor, content, parseContent, contentType]);
+  }, [editor, content, contentType]);
 
   const setLink = useCallback(() => {
     if (!editor) return;

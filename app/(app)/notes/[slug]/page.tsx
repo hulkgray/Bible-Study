@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TiptapEditor from "@/components/tiptap-editor";
-import { markdownToHtml } from "@/lib/markdown-to-html";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -373,10 +372,10 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
             const isMarkdown = c.markdown && typeof c.markdown === "string";
             return (
               <TiptapEditor
-                content={isMarkdown ? markdownToHtml(c.markdown as string) : (
+                content={isMarkdown ? (c.markdown as string) : (
                   Object.keys(note.content).length > 0 ? JSON.stringify(note.content) : ""
                 )}
-                contentType={isMarkdown ? "html" : "json"}
+                contentType={isMarkdown ? "markdown" : "json"}
                 onUpdate={handleContentUpdate}
                 placeholder="Start writing your study notes..."
                 className="border-0 rounded-none min-h-[60vh] px-8 md:px-12 py-8 md:py-10"
