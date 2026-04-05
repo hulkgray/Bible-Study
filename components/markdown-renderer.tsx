@@ -2,15 +2,18 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkCitations } from "@/lib/remark-citations";
+import { CitationLink } from "@/components/citation-link";
 
 /**
  * MarkdownRenderer — renders markdown content with Bible study-themed prose styles.
  * Used in Notes (AI exports) and potentially chat messages.
+ * Includes remarkCitations plugin for interactive verse, Strong's, and dictionary tooltips.
  */
 export function MarkdownRenderer({ content }: { content: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkCitations]}
       components={{
         h1: ({ children }) => (
           <h1 className="text-xl font-scripture font-bold mb-3 text-foreground">{children}</h1>
@@ -55,16 +58,8 @@ export function MarkdownRenderer({ content }: { content: string }) {
           );
         },
         hr: () => <hr className="border-border/30 my-4" />,
-        a: ({ href, children }) => (
-          <a
-            href={href}
-            className="text-gold hover:text-gold/80 underline underline-offset-2 transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {children}
-          </a>
-        ),
+        // Use CitationLink to render citations as interactive tooltips (same as AI Study)
+        a: CitationLink,
         table: ({ children }) => (
           <div className="overflow-x-auto mb-3">
             <table className="w-full text-xs border-collapse border border-border/30">{children}</table>

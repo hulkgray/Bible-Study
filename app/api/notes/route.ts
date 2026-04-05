@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDbClient } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { createNoteSchema, listNotesSchema } from "@/lib/validations/notes";
+import crypto from "crypto";
+
+function generateSlug(): string {
+  return crypto.randomBytes(6).toString("base64url"); // 8 chars, URL-safe
+}
 
 /**
  * GET /api/notes — List notes for the authenticated user
@@ -30,7 +35,7 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       notes = await sql`
-        SELECT id, title, content, folder_id, color, pinned, links, created_at, updated_at
+        SELECT id, slug, title, content, folder_id, color, pinned, links, share_mode, created_at, updated_at
         FROM study_notes
         WHERE user_id = ${user.userId}
           AND (title ILIKE ${'%' + search + '%'} OR content::text ILIKE ${'%' + search + '%'})
@@ -39,14 +44,14 @@ export async function GET(request: NextRequest) {
       `;
     } else if (folderId) {
       notes = await sql`
-        SELECT id, title, content, folder_id, color, pinned, links, created_at, updated_at
+        SELECT id, slug, title, content, folder_id, color, pinned, links, share_mode, created_at, updated_at
         FROM study_notes
         WHERE user_id = ${user.userId} AND folder_id = ${folderId}
         ORDER BY pinned DESC, updated_at DESC
       `;
     } else {
       notes = await sql`
-        SELECT id, title, content, folder_id, color, pinned, links, created_at, updated_at
+        SELECT id, slug, title, content, folder_id, color, pinned, links, share_mode, created_at, updated_at
         FROM study_notes
         WHERE user_id = ${user.userId} AND folder_id IS NULL
         ORDER BY pinned DESC, updated_at DESC
@@ -56,6 +61,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: notes.map((n) => ({
         id: n.id,
+        slug: n.slug,
         type: "note",
         title: n.title,
         content: n.content,
@@ -63,6 +69,7 @@ export async function GET(request: NextRequest) {
         color: n.color,
         pinned: n.pinned,
         links: n.links,
+        shareMode: n.share_mode,
         createdAt: n.created_at,
         updatedAt: n.updated_at,
       })),
@@ -94,20 +101,22 @@ export async function POST(request: NextRequest) {
     }
 
     const { title, content, folderId, color, links } = result.data;
+    const slug = generateSlug();
     const sql = getDbClient();
 
     const rows = await sql`
-      INSERT INTO study_notes (user_id, title, content, folder_id, color, links)
-      VALUES (${user.userId}, ${title}, ${JSON.stringify(content)}, ${folderId}, ${color}, ${JSON.stringify(links)})
-      RETURNING id, title, content, folder_id, color, pinned, links, created_at, updated_at
+      INSERT INTO study_notes (user_id, title, content, folder_id, color, links, slug)
+      VALUES (${user.userId}, ${title}, ${JSON.stringify(content)}, ${folderId}, ${color}, ${JSON.stringify(links)}, ${slug})
+      RETURNING id, slug, title, content, folder_id, color, pinned, links, share_mode, created_at, updated_at
     `;
 
     const n = rows[0];
-    console.log(`[API /notes] Created note: title="${n.title}", user=${user.userId}`);
+    console.log(`[API /notes] Created note: title="${n.title}", slug=${n.slug}, user=${user.userId}`);
 
     return NextResponse.json({
       data: {
         id: n.id,
+        slug: n.slug,
         type: "note",
         title: n.title,
         content: n.content,
@@ -115,6 +124,7 @@ export async function POST(request: NextRequest) {
         color: n.color,
         pinned: n.pinned,
         links: n.links,
+        shareMode: n.share_mode,
         createdAt: n.created_at,
         updatedAt: n.updated_at,
       },

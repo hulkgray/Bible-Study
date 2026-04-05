@@ -35,75 +35,11 @@ import Link from "next/link";
 import { parseCitations, extractSourceFooter } from "@/lib/citation-parser";
 import { PromptLibrary } from "@/components/prompt-library";
 import { remarkCitations } from "@/lib/remark-citations";
-import { CitationTooltip } from "@/components/citation-tooltip";
-import { StrongsTooltip } from "@/components/strongs-tooltip";
-import { DictionaryTooltip } from "@/components/dictionary-tooltip";
+import { CitationLink } from "@/components/citation-link";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-/**
- * Custom link renderer for Streamdown — detects citation links
- * and wraps them in CitationTooltip for verse hover previews.
- */
-function CitationLink({ href, title, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
-  // Check if this is a citation link (marked by our remark plugin)
-  const isCitation = title && title.startsWith("citation:");
-  const citationType = isCitation ? title.replace("citation:", "") : null;
-
-  if (isCitation && citationType === "verse" && href) {
-    // Parse: /bible/genesis/1
-    const parts = href.split("/");
-    const bookSlug = parts[2] || "";
-    const chapter = parseInt(parts[3] || "1", 10);
-    const displayText = typeof children === "string" ? children : String(children);
-    const verseMatch = displayText.match(/(\d+):(\d+)(?:\s*[-–]\s*(\d+))?$/);
-    const verse = verseMatch ? parseInt(verseMatch[2], 10) : 1;
-    const endVerse = verseMatch?.[3] ? parseInt(verseMatch[3], 10) : undefined;
-
-    return (
-      <CitationTooltip
-        bookSlug={bookSlug}
-        chapter={chapter}
-        verse={verse}
-        endVerse={endVerse}
-        href={href}
-      >
-        {children}
-      </CitationTooltip>
-    );
-  }
-
-  if (isCitation && citationType === "strongs" && href) {
-    // Extract Strong's number from the href: /strongs?q=H430 → H430
-    const qMatch = href.match(/[?&]q=([^&]+)/);
-    const strongsNum = qMatch ? decodeURIComponent(qMatch[1]) : String(children);
-
-    return (
-      <StrongsTooltip strongsNumber={strongsNum} href={href}>
-        {children}
-      </StrongsTooltip>
-    );
-  }
-
-  if (isCitation && citationType === "dictionary" && href) {
-    // Extract term from href: /dictionary?q=Covenant → Covenant
-    const qMatch = href.match(/[?&]q=([^&]+)/);
-    const term = qMatch ? decodeURIComponent(qMatch[1]) : String(children);
-
-    return (
-      <DictionaryTooltip term={term} href={href}>
-        {children}
-      </DictionaryTooltip>
-    );
-  }
-
-  // Regular markdown link — render as standard anchor
-  return (
-    <a href={href} title={title} className="text-gold hover:underline" target="_blank" rel="noopener noreferrer" {...props}>
-      {children}
-    </a>
-  );
-}
+// CitationLink is now imported from @/components/citation-link
 
 // ============================================
 // Reasoning Block — collapsible thinking animation
@@ -477,7 +413,16 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
   const exportToNote = async (text: string) => {
     try {
       const title = text.substring(0, 60).replace(/[#*_]/g, "").trim() + "...";
-      // Store raw markdown so the Notes page can render with react-markdown
+
+      // Auto-extract citation links from the markdown text
+      const citations = parseCitations(text);
+      const links = extractSourceFooter(citations).map((s) => ({
+        type: s.type === "📖" ? "verse" : s.type === "🔤" ? "strongs" : "dictionary",
+        ref: s.display,
+        href: s.href,
+      }));
+
+      // Store raw markdown so the Notes page can render with react-markdown + citations
       const tiptapContent = {
         type: "doc",
         content: [
@@ -496,6 +441,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
         body: JSON.stringify({
           title: `AI Study: ${title}`,
           content: tiptapContent,
+          links,
         }),
       });
 
@@ -744,27 +690,35 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                     <div className="flex items-center gap-0.5 mt-3 pt-2 border-t border-border/30">
                       <CopyButton
                         text={(() => {
-                          const tp = m.parts.find((p) => p.type === "text");
-                          return tp && "text" in tp ? tp.text.replace(/[#*_`]/g, "") : "";
+                          // Concatenate ALL text parts — multi-step tool calls create multiple text parts
+                          return m.parts
+                            .filter((p) => p.type === "text" && "text" in p)
+                            .map((p) => (p as { type: "text"; text: string }).text)
+                            .join("\n\n")
+                            .replace(/[#*_`]/g, "");
                         })()}
                         label="Copy"
                         icon={<Copy className="h-3 w-3" />}
                       />
                       <CopyButton
                         text={(() => {
-                          const tp = m.parts.find((p) => p.type === "text");
-                          return tp && "text" in tp ? tp.text : "";
+                          return m.parts
+                            .filter((p) => p.type === "text" && "text" in p)
+                            .map((p) => (p as { type: "text"; text: string }).text)
+                            .join("\n\n");
                         })()}
                         label="Copy Markdown"
                         icon={<ClipboardCopy className="h-3 w-3" />}
                       />
                       <button
                         onClick={() => {
-                          const textPart = m.parts.find(
-                            (p) => p.type === "text"
-                          );
-                          if (textPart && "text" in textPart) {
-                            exportToNote(textPart.text);
+                          // Concatenate ALL text parts for full export
+                          const allText = m.parts
+                            .filter((p) => p.type === "text" && "text" in p)
+                            .map((p) => (p as { type: "text"; text: string }).text)
+                            .join("\n\n");
+                          if (allText) {
+                            exportToNote(allText);
                           }
                         }}
                         className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-gold px-2 py-1 rounded-md hover:bg-gold/5 transition-colors"

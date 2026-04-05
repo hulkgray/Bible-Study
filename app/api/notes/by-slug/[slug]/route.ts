@@ -5,29 +5,26 @@ import { updateNoteSchema } from "@/lib/validations/notes";
 import { z } from "zod";
 
 const paramsSchema = z.object({
-  id: z.string().uuid(),
+  slug: z.string().min(1).max(20),
 });
 
 /**
- * GET /api/notes/[id] — Get a single note (user-scoped)
+ * GET /api/notes/by-slug/[slug] — Get a note by its public slug.
+ * - If the note is private, requires authentication and ownership.
+ * - If share_mode is 'view' or 'edit', allows unauthenticated access.
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = paramsSchema.parse(await params);
+    const { slug } = paramsSchema.parse(await params);
     const sql = getDbClient();
 
     const rows = await sql`
-      SELECT id, slug, title, content, folder_id, color, pinned, links, share_mode, created_at, updated_at
+      SELECT id, slug, user_id, title, content, folder_id, color, pinned, links, share_mode, created_at, updated_at
       FROM study_notes
-      WHERE id = ${id} AND user_id = ${user.userId}
+      WHERE slug = ${slug}
     `;
 
     if (rows.length === 0) {
@@ -35,6 +32,19 @@ export async function GET(
     }
 
     const n = rows[0];
+
+    // If private, require auth and ownership
+    if (n.share_mode === "private") {
+      const user = await getCurrentUser();
+      if (!user || user.userId !== n.user_id) {
+        return NextResponse.json({ error: "Note not found" }, { status: 404 });
+      }
+    }
+
+    // Determine if current viewer is the owner
+    const user = await getCurrentUser().catch(() => null);
+    const isOwner = user ? user.userId === n.user_id : false;
+
     return NextResponse.json({
       data: {
         id: n.id,
@@ -47,30 +57,48 @@ export async function GET(
         pinned: n.pinned,
         links: n.links,
         shareMode: n.share_mode,
+        isOwner,
         createdAt: n.created_at,
         updatedAt: n.updated_at,
       },
     });
   } catch (error) {
-    console.error("[API /notes/[id]] GET error:", error);
+    console.error("[API /notes/by-slug/[slug]] GET error:", error);
     return NextResponse.json({ error: "Failed to fetch note" }, { status: 500 });
   }
 }
 
 /**
- * PATCH /api/notes/[id] — Update a note (user-scoped)
+ * PATCH /api/notes/by-slug/[slug] — Update a note by slug.
+ * - Owner can always update.
+ * - If share_mode is 'edit', anyone can update content/title.
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const { slug } = paramsSchema.parse(await params);
+    const sql = getDbClient();
+
+    // First, get the note to check permissions
+    const existing = await sql`
+      SELECT id, user_id, share_mode FROM study_notes WHERE slug = ${slug}
+    `;
+
+    if (existing.length === 0) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
     }
 
-    const { id } = paramsSchema.parse(await params);
+    const note = existing[0];
+    const user = await getCurrentUser().catch(() => null);
+    const isOwner = user ? user.userId === note.user_id : false;
+
+    // Only allow edit if owner OR share_mode === 'edit'
+    if (!isOwner && note.share_mode !== "edit") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const body = await request.json();
     const result = updateNoteSchema.safeParse(body);
 
@@ -81,21 +109,17 @@ export async function PATCH(
       );
     }
 
-    const sql = getDbClient();
-    const { title, content, folderId, color, pinned, links, shareMode } = result.data;
+    const { title, content, links } = result.data;
 
+    // Non-owners can only update title, content and links — not share_mode, color, pinned, folder
     const rows = await sql`
       UPDATE study_notes
       SET
         title = COALESCE(${title ?? null}, title),
         content = COALESCE(${content ? JSON.stringify(content) : null}::jsonb, content),
-        folder_id = ${folderId !== undefined ? folderId : null},
-        color = COALESCE(${color ?? null}, color),
-        pinned = COALESCE(${pinned ?? null}, pinned),
         links = COALESCE(${links ? JSON.stringify(links) : null}::jsonb, links),
-        share_mode = COALESCE(${shareMode ?? null}, share_mode),
         updated_at = now()
-      WHERE id = ${id} AND user_id = ${user.userId}
+      WHERE slug = ${slug}
       RETURNING id, slug, title, content, folder_id, color, pinned, links, share_mode, created_at, updated_at
     `;
 
@@ -116,41 +140,13 @@ export async function PATCH(
         pinned: n.pinned,
         links: n.links,
         shareMode: n.share_mode,
+        isOwner,
         createdAt: n.created_at,
         updatedAt: n.updated_at,
       },
     });
   } catch (error) {
-    console.error("[API /notes/[id]] PATCH error:", error);
+    console.error("[API /notes/by-slug/[slug]] PATCH error:", error);
     return NextResponse.json({ error: "Failed to update note" }, { status: 500 });
-  }
-}
-
-/**
- * DELETE /api/notes/[id] — Delete a note (user-scoped)
- */
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { id } = paramsSchema.parse(await params);
-    const sql = getDbClient();
-
-    const result = await sql`DELETE FROM study_notes WHERE id = ${id} AND user_id = ${user.userId} RETURNING id`;
-
-    if (result.length === 0) {
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ data: { deleted: true, id } });
-  } catch (error) {
-    console.error("[API /notes/[id]] DELETE error:", error);
-    return NextResponse.json({ error: "Failed to delete note" }, { status: 500 });
   }
 }

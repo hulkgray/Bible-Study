@@ -23,6 +23,7 @@ export const listNotesSchema = z.object({
 export const updateNoteSchema = createNoteSchema
   .extend({
     pinned: z.boolean().optional(),
+    shareMode: z.enum(["private", "view", "edit"]).optional(),
   })
   .partial();
 
