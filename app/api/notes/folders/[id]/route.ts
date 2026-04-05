@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDbClient } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 import { z } from "zod";
 
 const updateFolderSchema = z.object({
@@ -13,13 +14,18 @@ const paramsSchema = z.object({
 });
 
 /**
- * PATCH /api/notes/folders/[id] — Update a folder
+ * PATCH /api/notes/folders/[id] — Update a folder (user-scoped)
  */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const body = await request.json();
     const result = updateFolderSchema.safeParse(body);
@@ -41,7 +47,7 @@ export async function PATCH(
         parent_id = COALESCE(${parentId ?? null}, parent_id),
         color = COALESCE(${color ?? null}, color),
         updated_at = now()
-      WHERE id = ${id}
+      WHERE id = ${id} AND user_id = ${user.userId}
       RETURNING id, name, parent_id, color, created_at, updated_at
     `;
 
@@ -68,22 +74,27 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/notes/folders/[id] — Delete a folder (moves contents to root)
+ * DELETE /api/notes/folders/[id] — Delete a folder (user-scoped, moves contents to root)
  */
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = paramsSchema.parse(await params);
     const sql = getDbClient();
 
-    // Move notes out of folder → root
-    await sql`UPDATE study_notes SET folder_id = NULL WHERE folder_id = ${id}`;
-    // Move subfolders out → root
-    await sql`UPDATE note_folders SET parent_id = NULL WHERE parent_id = ${id}`;
-    // Delete folder
-    const result = await sql`DELETE FROM note_folders WHERE id = ${id} RETURNING id`;
+    // Move notes out of folder → root (user-scoped)
+    await sql`UPDATE study_notes SET folder_id = NULL WHERE folder_id = ${id} AND user_id = ${user.userId}`;
+    // Move subfolders out → root (user-scoped)
+    await sql`UPDATE note_folders SET parent_id = NULL WHERE parent_id = ${id} AND user_id = ${user.userId}`;
+    // Delete folder (user-scoped)
+    const result = await sql`DELETE FROM note_folders WHERE id = ${id} AND user_id = ${user.userId} RETURNING id`;
 
     if (result.length === 0) {
       return NextResponse.json({ error: "Folder not found" }, { status: 404 });
@@ -95,3 +106,4 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to delete folder" }, { status: 500 });
   }
 }
+

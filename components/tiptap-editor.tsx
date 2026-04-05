@@ -30,7 +30,7 @@ import {
   LinkIcon,
   Minus,
 } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface TiptapEditorProps {
   content: string;
@@ -106,26 +106,43 @@ export default function TiptapEditor({
     immediatelyRender: false,
   });
 
+  // Track whether we've initialized content to avoid re-parsing markdown
+  const initializedRef = useRef(false);
+  const lastContentRef = useRef(content);
+
   // Re-initialize content when prop changes (i.e., switching notes)
   useEffect(() => {
-    if (editor && content) {
-      if (contentType === "markdown" && editor.markdown) {
-        // Use Tiptap's built-in markdown parser to convert to editor JSON
+    if (!editor) return;
+
+    if (!content) {
+      editor.commands.clearContent(false);
+      initializedRef.current = false;
+      lastContentRef.current = "";
+      return;
+    }
+
+    // Skip if we've already initialized with this exact content string
+    if (initializedRef.current && content === lastContentRef.current) return;
+
+    if (contentType === "markdown" && editor.markdown) {
+      // Only parse markdown on first load — after user edits, content
+      // will be saved as Tiptap JSON and won't hit this branch anymore
+      if (!initializedRef.current) {
         const parsed = editor.markdown.parse(content);
-        editor.commands.setContent(parsed);
-      } else if (contentType !== "markdown") {
-        try {
-          const parsed = JSON.parse(content);
-          const currentJSON = JSON.stringify(editor.getJSON());
-          if (content !== currentJSON) {
-            editor.commands.setContent(parsed);
-          }
-        } catch {
-          // ignore parse errors
-        }
+        editor.commands.setContent(parsed, false); // false = don't trigger onUpdate
+        initializedRef.current = true;
+        lastContentRef.current = content;
       }
-    } else if (editor && !content) {
-      editor.commands.clearContent();
+    } else if (contentType !== "markdown") {
+      try {
+        const parsed = JSON.parse(content);
+        // Use false to suppress onUpdate → prevents save loop
+        editor.commands.setContent(parsed, false);
+        initializedRef.current = true;
+        lastContentRef.current = content;
+      } catch {
+        // ignore parse errors
+      }
     }
   }, [editor, content, contentType]);
 
