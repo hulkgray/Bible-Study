@@ -37,6 +37,8 @@ interface TiptapEditorProps {
   placeholder?: string;
   className?: string;
   editable?: boolean;
+  /** 'json' (default) = Tiptap JSON string, 'html' = HTML string */
+  contentType?: "json" | "html";
 }
 
 export default function TiptapEditor({
@@ -45,7 +47,19 @@ export default function TiptapEditor({
   placeholder = "Start writing your notes...",
   className,
   editable = true,
+  contentType = "json",
 }: TiptapEditorProps) {
+  /** Parse the content prop based on contentType */
+  const parseContent = useCallback((raw: string) => {
+    if (!raw) return undefined;
+    if (contentType === "html") return raw; // Tiptap natively accepts HTML strings
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }, [contentType]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -76,7 +90,7 @@ export default function TiptapEditor({
         types: ["heading", "paragraph"],
       }),
     ],
-    content: content ? JSON.parse(content) : undefined,
+    content: parseContent(content),
     editable,
     editorProps: {
       attributes: {
@@ -103,19 +117,22 @@ export default function TiptapEditor({
   // Re-initialize content when prop changes (i.e., switching notes)
   useEffect(() => {
     if (editor && content) {
-      try {
-        const parsed = JSON.parse(content);
-        const currentJSON = JSON.stringify(editor.getJSON());
-        if (content !== currentJSON) {
+      const parsed = parseContent(content);
+      if (parsed) {
+        // For JSON, compare to avoid unnecessary re-renders
+        if (contentType === "json") {
+          const currentJSON = JSON.stringify(editor.getJSON());
+          if (content !== currentJSON) {
+            editor.commands.setContent(parsed);
+          }
+        } else {
           editor.commands.setContent(parsed);
         }
-      } catch {
-        // ignore parse errors
       }
     } else if (editor && !content) {
       editor.commands.clearContent();
     }
-  }, [editor, content]);
+  }, [editor, content, parseContent, contentType]);
 
   const setLink = useCallback(() => {
     if (!editor) return;
