@@ -109,9 +109,11 @@ export default function TiptapEditor({
   // Re-initialize content when prop changes (i.e., switching notes)
   useEffect(() => {
     if (editor && content) {
-      if (contentType === "markdown") {
-        editor.commands.setContent(content, false, { contentType: "markdown" });
-      } else {
+      if (contentType === "markdown" && editor.markdown) {
+        // Use Tiptap's built-in markdown parser to convert to editor JSON
+        const parsed = editor.markdown.parse(content);
+        editor.commands.setContent(parsed);
+      } else if (contentType !== "markdown") {
         try {
           const parsed = JSON.parse(content);
           const currentJSON = JSON.stringify(editor.getJSON());
