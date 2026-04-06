@@ -412,7 +412,11 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
   // Export assistant response to a new note
   const exportToNote = async (text: string) => {
     try {
-      const title = text.substring(0, 60).replace(/[#*_]/g, "").trim() + "...";
+      // Extract title from first heading (# or ##), fallback to first line
+      const headingMatch = text.match(/^#{1,3}\s+(.+)$/m);
+      const title = headingMatch
+        ? headingMatch[1].replace(/[#*_\[\]]/g, "").trim()
+        : text.substring(0, 60).replace(/[#*_]/g, "").trim() + "...";
 
       // Auto-extract citation links from the markdown text
       const citations = parseCitations(text);
@@ -422,16 +426,8 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
         href: s.href,
       }));
 
-      // Store raw markdown so the Notes page can render with react-markdown + citations
+      // Store raw markdown — TiptapEditor will parse it via @tiptap/markdown
       const tiptapContent = {
-        type: "doc",
-        content: [
-          {
-            type: "paragraph",
-            content: [{ type: "text", text }],
-          },
-        ],
-        // Store the raw markdown separately for react-markdown rendering
         markdown: text,
       };
 
@@ -439,7 +435,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: `AI Study: ${title}`,
+          title,
           content: tiptapContent,
           links,
         }),

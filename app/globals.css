@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 @source "../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
@@ -453,44 +454,85 @@ article tbody tr:hover {
 
 /* ── Print styles ── */
 @media print {
-  /* Hide sidebar, toolbars, and non-content UI */
+  /* Hide sidebar, toolbars, nav, and all non-content UI */
   aside,
   nav,
+  header,
+  footer,
   [data-sidebar],
-  .print\\:hidden {
+  [data-print-hide] {
     display: none !important;
+    width: 0 !important;
   }
 
-  /* Make main content fill the page */
+  /* Force main to fill full page width (no flex gap from hidden sidebar) */
+  body,
+  body > div,
+  body > div > div {
+    display: block !important;
+  }
+
   main {
     padding: 0 !important;
     margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
+  /* White background + black text for readability */
   body {
     background: white !important;
     color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
-  /* Clean page layout */
-  .print\\:bg-white {
+  /* Clean page layout for note content */
+  [data-print-clean] {
     background: white !important;
-  }
-
-  .print\\:shadow-none {
+    color: black !important;
     box-shadow: none !important;
-  }
-
-  .print\\:border-0 {
     border: 0 !important;
-  }
-
-  .print\\:my-0 {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-  }
-
-  .print\\:rounded-none {
+    margin: 0 !important;
+    padding: 1cm !important;
     border-radius: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Ensure prose content prints dark */
+  .prose,
+  .ProseMirror {
+    color: black !important;
+  }
+  .prose h1, .prose h2, .prose h3,
+  .ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+    color: black !important;
+  }
+  .prose p, .ProseMirror p {
+    color: black !important;
+  }
+  .prose blockquote, .ProseMirror blockquote {
+    border-color: #666 !important;
+    color: black !important;
+  }
+  .prose blockquote *, .ProseMirror blockquote * {
+    color: black !important;
+  }
+  .prose a, .ProseMirror a {
+    color: #333 !important;
+    text-decoration: underline !important;
+  }
+  .prose strong, .ProseMirror strong,
+  .prose em, .ProseMirror em {
+    color: black !important;
+  }
+  .prose mark, .ProseMirror mark {
+    background: #eee !important;
+    color: black !important;
+  }
+
+  /* Hide scrollbars */
+  * {
+    overflow: visible !important;
   }
 }

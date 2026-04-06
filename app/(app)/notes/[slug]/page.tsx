@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, use } from "react";
+import { useState, useCallback, useRef, use } from "react";
 import useSWR, { mutate } from "swr";
 import {
   ArrowLeft,
@@ -118,15 +118,26 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
     router.push("/notes");
   }, [note, router]);
 
+  // Debounce ref for content saves
+  const contentTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const handleContentUpdate = useCallback(
     (json: string) => {
       if (!note) return;
-      const timer = setTimeout(() => {
-        updateNote({ content: JSON.parse(json) } as unknown as Partial<NoteData>);
+      // Clear any pending save
+      if (contentTimerRef.current) clearTimeout(contentTimerRef.current);
+      contentTimerRef.current = setTimeout(async () => {
+        // Save content directly — do NOT call mutate() afterwards.
+        // The editor is the source of truth; re-fetching would cause a
+        // content fight loop (PATCH → GET → setContent → onUpdate → PATCH…)
+        await fetch(`/api/notes/${note.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: JSON.parse(json) }),
+        });
       }, 800);
-      return () => clearTimeout(timer);
     },
-    [note, updateNote]
+    [note]
   );
 
   const handleTitleUpdate = useCallback(
@@ -183,7 +194,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
   return (
     <div className="h-full flex flex-col">
       {/* Editor header */}
-      <div className="flex items-center gap-3 border-b border-border px-4 py-3 print:hidden">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3" data-print-hide>
         <button
           onClick={() => router.push("/notes")}
           className="p-1.5 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
@@ -341,7 +352,7 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
 
       {/* Linked resources */}
       {note.links && note.links.length > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/20 flex-wrap print:hidden">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted/20 flex-wrap" data-print-hide>
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
             Linked:
           </span>
@@ -365,8 +376,8 @@ export default function NoteDetailPage({ params }: { params: Promise<{ slug: str
       )}
 
       {/* Note content — page-view layout with constrained width */}
-      <div className="flex-1 overflow-y-auto bg-muted/20 print:bg-white">
-        <div className="max-w-3xl mx-auto my-6 md:my-10 bg-background rounded-xl shadow-border-medium border border-border/50 min-h-[70vh] print:shadow-none print:border-0 print:my-0 print:rounded-none">
+      <div className="flex-1 overflow-y-auto bg-muted/20">
+        <div className="max-w-3xl mx-auto my-6 md:my-10 bg-background rounded-xl shadow-border-medium border border-border/50 min-h-[70vh]" data-print-clean>
           {(() => {
             const c = note.content as Record<string, unknown>;
             const isMarkdown = c.markdown && typeof c.markdown === "string";

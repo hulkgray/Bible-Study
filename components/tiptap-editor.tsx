@@ -56,6 +56,9 @@ export default function TiptapEditor({
         heading: {
           levels: [1, 2, 3],
         },
+        // Disable these — we register custom-configured versions below
+        link: false,
+        underline: false,
       }),
       Highlight.configure({
         multicolor: true,
@@ -81,6 +84,8 @@ export default function TiptapEditor({
       }),
       Markdown,
     ],
+    // For markdown: pass the raw string + contentType. The Markdown extension's
+    // onBeforeCreate hook parses it to JSON before the editor renders.
     content: contentType === "markdown" ? content : (content ? JSON.parse(content) : undefined),
     contentType: contentType === "markdown" ? "markdown" : undefined,
     editable,
@@ -100,50 +105,54 @@ export default function TiptapEditor({
       },
     },
     onUpdate: ({ editor }) => {
+      // Block saves until content is properly initialized
+      if (!readyRef.current) return;
       const json = JSON.stringify(editor.getJSON());
+      // Update ref so the useEffect won't re-set content when SWR
+      // re-fetches the same data after our save
+      lastContentRef.current = json;
       onUpdate(json);
     },
     immediatelyRender: false,
   });
 
-  // Track whether we've initialized content to avoid re-parsing markdown
-  const initializedRef = useRef(false);
+  // Gate: block onUpdate until initial content is loaded.
+  // For markdown, the extension handles it in onBeforeCreate, so we open the
+  // gate once the editor is ready. For JSON, it's ready immediately.
+  const readyRef = useRef(false);
   const lastContentRef = useRef(content);
 
-  // Re-initialize content when prop changes (i.e., switching notes)
   useEffect(() => {
     if (!editor) return;
 
+    // First time the editor is ready — open the save gate
+    if (!readyRef.current) {
+      readyRef.current = true;
+      lastContentRef.current = content;
+      return;
+    }
+
+    // Re-initialize only when the content prop actually changes (e.g., SWR re-fetch
+    // after save, or navigating to a different note). Skip if it's the same content.
     if (!content) {
       editor.commands.clearContent(false);
-      initializedRef.current = false;
       lastContentRef.current = "";
       return;
     }
 
-    // Skip if we've already initialized with this exact content string
-    if (initializedRef.current && content === lastContentRef.current) return;
+    if (content === lastContentRef.current) return;
 
     if (contentType === "markdown" && editor.markdown) {
-      // Only parse markdown on first load — after user edits, content
-      // will be saved as Tiptap JSON and won't hit this branch anymore
-      if (!initializedRef.current) {
-        const parsed = editor.markdown.parse(content);
-        editor.commands.setContent(parsed, false); // false = don't trigger onUpdate
-        initializedRef.current = true;
-        lastContentRef.current = content;
-      }
+      const parsed = editor.markdown.parse(content);
+      editor.commands.setContent(parsed, false);
     } else if (contentType !== "markdown") {
       try {
-        const parsed = JSON.parse(content);
-        // Use false to suppress onUpdate → prevents save loop
-        editor.commands.setContent(parsed, false);
-        initializedRef.current = true;
-        lastContentRef.current = content;
+        editor.commands.setContent(JSON.parse(content), false);
       } catch {
         // ignore parse errors
       }
     }
+    lastContentRef.current = content;
   }, [editor, content, contentType]);
 
   const setLink = useCallback(() => {
@@ -197,7 +206,7 @@ export default function TiptapEditor({
     <div className={cn("rounded-xl border border-border overflow-hidden", className)}>
       {/* Toolbar */}
       {editable && (
-        <div className="flex items-center gap-0.5 p-1.5 border-b border-border bg-muted/30 flex-wrap">
+        <div className="flex items-center gap-0.5 p-1.5 border-b border-border bg-muted/30 flex-wrap" data-print-hide>
           {/* History */}
           <ToolbarButton
             onClick={() => editor.chain().focus().undo().run()}

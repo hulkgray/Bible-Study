@@ -111,7 +111,7 @@ export default function PublicNotePage({ params }: { params: Promise<{ slug: str
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Minimal header */}
-      <header className="border-b border-border print:hidden">
+      <header className="border-b border-border" data-print-hide>
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <Link
             href="/"
@@ -193,7 +193,7 @@ export default function PublicNotePage({ params }: { params: Promise<{ slug: str
 
         {/* Content */}
         <div className="max-w-3xl mx-auto">
-          <div className="bg-background rounded-xl shadow-border-medium border border-border/50 px-8 md:px-12 py-8 md:py-10 min-h-[50vh] print:shadow-none print:border-0 print:rounded-none">
+          <div className="bg-background rounded-xl shadow-border-medium border border-border/50 px-8 md:px-12 py-8 md:py-10 min-h-[50vh]" data-print-clean>
             {(() => {
               const c = note.content as Record<string, unknown>;
               const isMarkdown = c?.markdown && typeof c.markdown === "string";
