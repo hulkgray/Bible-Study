@@ -144,10 +144,10 @@ export default function TiptapEditor({
 
     if (contentType === "markdown" && editor.markdown) {
       const parsed = editor.markdown.parse(content);
-      editor.commands.setContent(parsed, false);
+      editor.commands.setContent(parsed, { emitUpdate: false });
     } else if (contentType !== "markdown") {
       try {
-        editor.commands.setContent(JSON.parse(content), false);
+        editor.commands.setContent(JSON.parse(content), { emitUpdate: false });
       } catch {
         // ignore parse errors
       }
