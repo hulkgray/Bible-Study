@@ -48,3 +48,14 @@ pnpm-lock.yaml
 
 # Temp utility scripts
 scripts/_*.js
+scripts/*.local.*
+scripts/*.env*
+scripts/*.credentials.*
+scripts/temp-*
+scripts/_*
+
+# Agents
+.agents/
+.agents
+.agents-lock.json
+

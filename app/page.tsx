@@ -41,8 +41,8 @@ const FEATURES = [
   },
   {
     icon: BookText,
-    title: "Bible Dictionary",
-    desc: "Easton's complete reference with 4,000+ entries on people, places, and concepts.",
+    title: "Bible & English Dictionaries",
+    desc: "Easton's Bible Dictionary (4,000+ entries) and Webster's 1828 Dictionary (61,000+ entries) for comprehensive word study.",
     color: "text-purple-400",
   },
   {
@@ -210,6 +210,18 @@ export default async function LandingPage() {
           Create Free Account
           <ArrowRight className="h-4 w-4" />
         </Link>
+      </section>
+
+      {/* Attributions & Credits */}
+      <section className="border-t border-border/50 bg-card/20 py-8" data-print-hide>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 text-center text-xs text-muted-foreground/80 space-y-2 leading-relaxed">
+          <p>
+            Reference texts and dictionaries: The King James Bible (1769 KJV), Strong&apos;s Concordance, Easton&apos;s Bible Dictionary, and <span className="text-foreground/85 font-medium">Noah Webster&apos;s 1828 Dictionary</span> are fully in the public domain.
+          </p>
+          <p>
+            Theological library: The complete public domain works of Charles H. Spurgeon (A Puritan Catechism, Morning &amp; Evening, Faith&apos;s Checkbook) are sourced and transcribed with special thanks and credit to the <a href="https://www.princeofpreachers.org" target="_blank" rel="noopener noreferrer" className="text-gold/80 hover:text-gold hover:underline transition-colors">Prince of Preachers archive</a>.
+          </p>
+        </div>
       </section>
 
       {/* Footer */}

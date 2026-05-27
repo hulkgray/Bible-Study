@@ -7,7 +7,7 @@
  */
 
 /** Default model — best balance of quality, speed, and cost */
-export const DEFAULT_MODEL = "anthropic/claude-opus-4.6";
+export const DEFAULT_MODEL = "anthropic/claude-opus-4.7";
 
 /** Temperature for Bible study — low for theological accuracy, slight warmth for readability */
 export const DEFAULT_TEMPERATURE = 0.3;
@@ -18,11 +18,13 @@ export const DEFAULT_TEMPERATURE = 0.3;
  */
 export const SUPPORTED_MODELS = [
   // Anthropic — flagship reasoning + 1M context window
+  "anthropic/claude-opus-4.7",
   "anthropic/claude-opus-4.6",
   "anthropic/claude-sonnet-4.6",
   "anthropic/claude-haiku-4.5",
 
   // Google — multilingual + long-doc mastery
+  "google/gemini-3.5-flash",
   "google/gemini-3.1-pro-preview",
   "google/gemini-3-flash",
 
@@ -39,9 +41,11 @@ export const SUPPORTED_MODELS = [
  * Used by the chat route to set maxOutputTokens dynamically per-model.
  */
 export const MAX_OUTPUT_TOKENS: Record<string, number> = {
+  "anthropic/claude-opus-4.7":       128_000,
   "anthropic/claude-opus-4.6":       128_000,
   "anthropic/claude-sonnet-4.6":     128_000,
   "anthropic/claude-haiku-4.5":       64_000,
+  "google/gemini-3.5-flash":          65_536,
   "google/gemini-3.1-pro-preview":    65_536,
   "google/gemini-3-flash":            65_536,
   "openai/gpt-5-mini":              128_000,
@@ -56,6 +60,12 @@ export const MODEL_INFO: Record<
   string,
   { label: string; provider: string; tier: string; description: string }
 > = {
+  "anthropic/claude-opus-4.7": {
+    label: "Claude Opus 4.7 (Reasoning)",
+    provider: "Anthropic",
+    tier: "flagship",
+    description: "Best theological reasoning, max reasoning enabled",
+  },
   "anthropic/claude-opus-4.6": {
     label: "Claude Opus 4.6",
     provider: "Anthropic",
@@ -74,6 +84,12 @@ export const MODEL_INFO: Record<
     tier: "fast",
     description: "Lightning-fast responses",
   },
+  "google/gemini-3.5-flash": {
+    label: "Gemini 3.5 Flash",
+    provider: "Google",
+    tier: "fast",
+    description: "Pro reasoning at flash speed",
+  },
   "google/gemini-3.1-pro-preview": {
     label: "Gemini 3.1 Pro",
     provider: "Google",
@@ -81,7 +97,7 @@ export const MODEL_INFO: Record<
     description: "Excellent multilingual + long documents",
   },
   "google/gemini-3-flash": {
-    label: "Gemini 3 Flash",
+    label: "Gemini 3-Flash",
     provider: "Google",
     tier: "fast",
     description: "Pro reasoning at flash speed",

@@ -1,34 +1,55 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ModelSelector } from "@/components/model-selector";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+
+// AI Elements — Conversation
 import {
-  SendIcon,
-  Square,
-  PlusIcon,
-  ChevronDown,
-  ChevronRight,
-  Brain,
-  FileText,
-  Loader2,
-  History,
-  Trash2,
-  X,
-  Copy,
-  Check,
-  Pencil,
-  ClipboardCopy,
-  BookOpenText,
-} from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+
+// AI Elements — Message
+import {
+  Message,
+  MessageContent,
+  MessageActions,
+  MessageAction,
+} from "@/components/ai-elements/message";
+
+// AI Elements — Reasoning
+import {
+  Reasoning,
+  ReasoningTrigger,
+  ReasoningContent,
+} from "@/components/ai-elements/reasoning";
+
+// AI Elements — Tool
+import {
+  Tool,
+  ToolHeader,
+} from "@/components/ai-elements/tool";
+
+// AI Elements — Prompt Input
+import {
+  PromptInput,
+  type PromptInputMessage,
+  PromptInputTextarea,
+  PromptInputSubmit,
+  PromptInputFooter,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
+
+// App-specific
+import { ModelSelector } from "@/components/model-selector";
 import { DEFAULT_MODEL } from "@/lib/constants";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Streamdown } from "streamdown";
+import { code } from "@streamdown/code";
 import remarkGfm from "remark-gfm";
 import useSWR, { mutate } from "swr";
 import Link from "next/link";
@@ -36,124 +57,110 @@ import { parseCitations, extractSourceFooter } from "@/lib/citation-parser";
 import { PromptLibrary } from "@/components/prompt-library";
 import { remarkCitations } from "@/lib/remark-citations";
 import { CitationLink } from "@/components/citation-link";
+import { useWakeLock } from "@/lib/hooks/use-wake-lock";
+import { Spinner } from "@/components/ui/spinner";
+
+import {
+  Copy,
+  ClipboardCopy,
+  FileText,
+  Pencil,
+  PlusIcon,
+  History,
+  BookOpenText,
+  X,
+  Trash2,
+  RefreshCcw,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-// CitationLink is now imported from @/components/citation-link
+// Streamdown plugins — code highlighting via Shiki
+const streamdownPlugins = { code };
 
 // ============================================
-// Reasoning Block — collapsible thinking animation
+// MessageParts — consolidated reasoning + text + tool rendering
 // ============================================
-function ReasoningBlock({
-  reasoningText,
+function MessageParts({
+  message,
+  isLastMessage,
   isStreaming,
 }: {
-  reasoningText: string;
+  message: UIMessage;
+  isLastMessage: boolean;
   isStreaming: boolean;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
+  // Consolidate all reasoning parts into one block (handles models that send multiple chunks)
+  const reasoningParts = message.parts.filter(
+    (part) => part.type === "reasoning"
+  );
+  const reasoningText = reasoningParts.map((part) => part.text).join("\n\n");
+  const hasReasoning = reasoningParts.length > 0;
+
+  // Check if reasoning is still streaming
+  const lastPart = message.parts.at(-1);
+  const isReasoningStreaming =
+    isLastMessage && isStreaming && lastPart?.type === "reasoning";
 
   return (
-    <div className="mb-2">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={cn(
-          "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all",
-          isStreaming
-            ? "bg-gold/10 text-gold border border-gold/20"
-            : "bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent"
-        )}
-      >
-        {isStreaming ? (
-          <div className="flex items-center gap-1.5">
-            <Brain className="h-3 w-3 animate-pulse" />
-            <span className="font-medium">Thinking</span>
-            <span className="flex gap-0.5">
-              <span className="w-1 h-1 rounded-full bg-gold animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="w-1 h-1 rounded-full bg-gold animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="w-1 h-1 rounded-full bg-gold animate-bounce" style={{ animationDelay: "300ms" }} />
-            </span>
-          </div>
-        ) : (
-          <>
-            <Brain className="h-3 w-3" />
-            <span>View Reasoning</span>
-            {isOpen ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-          </>
-        )}
-      </button>
-
-      {(isOpen || isStreaming) && (
-        <div
-          className={cn(
-            "mt-1.5 px-3 py-2.5 rounded-lg text-xs leading-relaxed max-h-[300px] overflow-y-auto hide-scrollbar",
-            "bg-muted/30 border border-border/50 text-muted-foreground",
-            "animate-slide-down"
-          )}
-        >
-          <pre className="whitespace-pre-wrap font-sans">{reasoningText}</pre>
-        </div>
+    <>
+      {/* Consolidated Reasoning block */}
+      {hasReasoning && (
+        <Reasoning className="w-full" isStreaming={isReasoningStreaming}>
+          <ReasoningTrigger />
+          <ReasoningContent>{reasoningText}</ReasoningContent>
+        </Reasoning>
       )}
-    </div>
+
+      {/* Text + Tool parts */}
+      {message.parts.map((part, i) => {
+        switch (part.type) {
+          case "text":
+            return message.role === "assistant" ? (
+              <Streamdown
+                key={`${message.id}-text-${i}`}
+                isAnimating={isStreaming && isLastMessage}
+                remarkPlugins={[remarkGfm, remarkCitations]}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                components={{ a: CitationLink as any }}
+                plugins={streamdownPlugins}
+              >
+                {part.text}
+              </Streamdown>
+            ) : (
+              <div key={`${message.id}-text-${i}`}>{part.text}</div>
+            );
+
+          case "reasoning":
+            // Already handled above
+            return null;
+
+          default: {
+            // Tool call parts (tool-lookup_verse, tool-lookup_strongs, etc.)
+            if (part.type.startsWith("tool-")) {
+              const state = (part as { state?: string }).state;
+              return (
+                <Tool key={`${message.id}-tool-${i}`}>
+                  <ToolHeader
+                    type={part.type as `tool-${string}`}
+                    state={
+                      (state as
+                        | "input-streaming"
+                        | "input-available"
+                        | "output-available"
+                        | "output-error") ?? "input-streaming"
+                    }
+                  />
+                </Tool>
+              );
+            }
+            return null;
+          }
+        }
+      })}
+    </>
   );
-}
-
-// ============================================
-// Copy Button — with check feedback
-// ============================================
-function CopyButton({
-  text,
-  label,
-  icon,
-}: {
-  text: string;
-  label: string;
-  icon: React.ReactNode;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <button
-      onClick={handleCopy}
-      className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-gold px-2 py-1 rounded-md hover:bg-gold/5 transition-colors"
-      title={label}
-    >
-      {copied ? <Check className="h-3 w-3 text-emerald-400" /> : icon}
-      {copied ? "Copied!" : label}
-    </button>
-  );
-}
-
-// ============================================
-// Model Selector with URL sync
-// ============================================
-function ModelSelectorHandler({
-  modelId,
-  onModelIdChange,
-}: {
-  modelId: string;
-  onModelIdChange: (newModelId: string) => void;
-}) {
-  const router = useRouter();
-
-  const handleSelectChange = (newModelId: string) => {
-    onModelIdChange(newModelId);
-    const params = new URLSearchParams();
-    params.set("modelId", newModelId);
-    router.push(`?${params.toString()}`);
-  };
-
-  return <ModelSelector modelId={modelId} onModelChange={handleSelectChange} />;
 }
 
 // ============================================
@@ -233,55 +240,33 @@ function ChatHistorySidebar({
 }
 
 // ============================================
-// Wake Lock Hook — prevents screen from sleeping during AI streaming
+// Citation Sources Footer
 // ============================================
-function useWakeLock(active: boolean) {
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
-
-  useEffect(() => {
-    if (!active) {
-      // Release lock when streaming ends
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-        wakeLockRef.current = null;
-      }
-      return;
-    }
-
-    // Acquire the wake lock when streaming starts
-    async function acquireLock() {
-      try {
-        if ('wakeLock' in navigator) {
-          wakeLockRef.current = await navigator.wakeLock.request('screen');
-          console.debug('[WakeLock] Acquired — screen will stay on during streaming');
-          wakeLockRef.current.addEventListener('release', () => {
-            console.debug('[WakeLock] Released');
-          });
-        }
-      } catch (err) {
-        // Wake Lock can fail if page is not visible or not supported
-        console.debug('[WakeLock] Could not acquire:', err);
-      }
-    }
-
-    acquireLock();
-
-    // Re-acquire if the page becomes visible again (e.g., user switched tabs)
-    function handleVisibilityChange() {
-      if (document.visibilityState === 'visible' && active && !wakeLockRef.current) {
-        acquireLock();
-      }
-    }
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-        wakeLockRef.current = null;
-      }
-    };
-  }, [active]);
+function CitationSourcesFooter({ message }: { message: UIMessage }) {
+  const tp = message.parts.find((p) => p.type === "text");
+  if (!tp || !("text" in tp)) return null;
+  const citations = parseCitations(tp.text);
+  if (citations.length === 0) return null;
+  const sources = extractSourceFooter(citations);
+  return (
+    <div className="mt-2 pt-2 border-t border-border/20">
+      <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">
+        Sources Referenced
+      </span>
+      <div className="flex flex-wrap gap-1.5 mt-1.5">
+        {sources.map((s, si) => (
+          <Link
+            key={si}
+            href={s.href}
+            className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-gold/5 text-gold/80 hover:bg-gold/10 hover:text-gold border border-gold/10 transition-colors"
+          >
+            <span>{s.type}</span>
+            <span>{s.display}</span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ============================================
@@ -293,12 +278,15 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
   const [showHistory, setShowHistory] = useState(false);
   const [showPromptLibrary, setShowPromptLibrary] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const searchParams = useSearchParams();
   const autoSentRef = useRef(false);
 
   const handleModelIdChange = (newModelId: string) => {
     setCurrentModelId(newModelId);
+    const params = new URLSearchParams();
+    params.set("modelId", newModelId);
+    router.push(`?${params.toString()}`);
   };
 
   const { messages, error, sendMessage, regenerate, setMessages, stop, status } = useChat({
@@ -308,16 +296,8 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
   const hasMessages = messages.length > 0;
   const isStreaming = status === "streaming";
 
-  // Keep screen awake while AI is streaming a response
+  // Keep screen awake while AI is streaming
   useWakeLock(isStreaming);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   // Auto-send prompt from URL (?prompt=...) — used by devotional "Study with AI"
   useEffect(() => {
@@ -358,11 +338,9 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
       if (!sid) return;
 
       // Save ALL messages — concatenate multi-part text and reasoning
-      // Filter to only user + assistant messages (skip tool messages)
       const payload = messages
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => {
-          // Extract text parts — be defensive: ensure p.type is exactly "text"
           const textContent = m.parts
             .filter((p): p is { type: "text"; text: string } => p.type === "text" && typeof (p as { text?: string }).text === "string")
             .map((p) => p.text)
@@ -375,9 +353,6 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
             .filter((t) => t.length > 0)
             .join("\n");
 
-          // Debug: log what we're saving per-message
-          console.debug(`[Chat Save] role=${m.role}, parts=${m.parts.length}, textLen=${textContent.length}, reasoningLen=${reasoningContent.length}, partTypes=[${m.parts.map(p => p.type).join(',')}]`);
-
           return {
             role: m.role,
             content: textContent,
@@ -385,7 +360,6 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
           };
         });
 
-      // PUT for full-conversation upsert (not POST append)
       const putRes = await fetch(`/api/chat/sessions/${sid}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -412,13 +386,11 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
   // Export assistant response to a new note
   const exportToNote = async (text: string) => {
     try {
-      // Extract title from first heading (# or ##), fallback to first line
       const headingMatch = text.match(/^#{1,3}\s+(.+)$/m);
       const title = headingMatch
         ? headingMatch[1].replace(/[#*_\[\]]/g, "").trim()
         : text.substring(0, 60).replace(/[#*_]/g, "").trim() + "...";
 
-      // Auto-extract citation links from the markdown text
       const citations = parseCitations(text);
       const links = extractSourceFooter(citations).map((s) => ({
         type: s.type === "📖" ? "verse" : s.type === "🔤" ? "strongs" : "dictionary",
@@ -426,10 +398,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
         href: s.href,
       }));
 
-      // Store raw markdown — TiptapEditor will parse it via @tiptap/markdown
-      const tiptapContent = {
-        markdown: text,
-      };
+      const tiptapContent = { markdown: text };
 
       const res = await fetch("/api/notes", {
         method: "POST",
@@ -449,6 +418,21 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
     }
   };
 
+  // Helper to get all text from a message
+  const getMessageText = (m: UIMessage) =>
+    m.parts
+      .filter((p) => p.type === "text" && "text" in p)
+      .map((p) => (p as { type: "text"; text: string }).text)
+      .join("\n\n");
+
+  // PromptInput submit handler
+  const handlePromptSubmit = (message: PromptInputMessage) => {
+    const text = message.text?.trim();
+    if (!text) return;
+    sendMessage({ text }, { body: { modelId: currentModelId } });
+    setInput("");
+  };
+
   return (
     <div className="flex flex-col h-screen overflow-hidden relative">
       {/* Chat History Sidebar */}
@@ -456,7 +440,6 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
         onSelectSession={async (id) => {
-          // Load session messages
           const res = await fetch(`/api/chat/sessions/${id}`);
           const data = await res.json();
           if (data.data?.messages) {
@@ -466,12 +449,10 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
                 id: m.id,
                 role: m.role,
                 parts: [
-                  // Reasoning part uses 'text' field (AI SDK v6 ReasoningUIPart format)
                   ...(m.reasoning ? [{ type: "reasoning" as const, text: m.reasoning }] : []),
                   { type: "text" as const, text: m.content || "" },
                 ],
               }));
-            console.debug("[Chat Load] Loaded messages:", uiMessages.map((m: { role: string; parts: { type: string; text?: string }[] }) => ({ role: m.role, parts: m.parts.length, textLen: m.parts.find(p => p.type === 'text')?.text?.length || 0 })));
             setMessages(uiMessages);
             setSessionId(id);
             setCurrentModelId(data.data.modelId);
@@ -519,7 +500,7 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
         onSelectPrompt={(template) => setInput(template)}
       />
 
-      {/* Empty state */}
+      {/* Empty state — shown when no messages */}
       {!hasMessages && (
         <div className="flex-1 flex flex-col items-center justify-center px-4 md:px-8 animate-fade-in">
           <div className="w-full max-w-2xl text-center space-y-8 md:space-y-12">
@@ -535,272 +516,140 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
               className="w-full animate-slide-up"
               style={{ animationDelay: "100ms" }}
             >
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  sendMessage(
-                    { text: input },
-                    { body: { modelId: currentModelId } }
-                  );
-                  setInput("");
-                }}
+              <PromptInput
+                onSubmit={handlePromptSubmit}
+                className="w-full"
               >
-                <div className="flex items-end gap-2 md:gap-3 p-3 md:p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
-                  <ModelSelectorHandler
-                    modelId={modelId}
-                    onModelIdChange={handleModelIdChange}
-                  />
-                  <div className="flex flex-1 items-end">
-                    <textarea
-                      name="prompt"
-                      placeholder="What does Genesis 1:1 mean in the original Hebrew?"
-                      onChange={(e) => {
-                        setInput(e.target.value);
-                        // Auto-resize
-                        e.target.style.height = 'auto';
-                        e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
-                      }}
-                      value={input}
-                      autoFocus
-                      rows={1}
-                      className="flex-1 border-0 bg-transparent focus-visible:outline-none text-base placeholder:text-muted-foreground/60 resize-none min-h-[36px] max-h-[200px] py-2"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          if (input.trim()) {
-                            sendMessage(
-                              { text: input },
-                              { body: { modelId: currentModelId } }
-                            );
-                            setInput('');
-                            e.currentTarget.style.height = 'auto';
-                          }
-                        }
-                      }}
+                <PromptInputTextarea
+                  value={input}
+                  placeholder="What does Genesis 1:1 mean in the original Hebrew?"
+                  onChange={(e) => setInput(e.currentTarget.value)}
+                  autoFocus
+                />
+                <PromptInputFooter>
+                  <PromptInputTools>
+                    <ModelSelector
+                      modelId={currentModelId}
+                      onModelChange={handleModelIdChange}
                     />
-                    {isStreaming ? (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="h-9 w-9 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-500 transition-colors"
-                        onClick={() => stop()}
-                        title="Stop generating"
-                      >
-                        <Square className="h-4 w-4 fill-current" />
-                      </Button>
-                    ) : (
-                      <Button
-                        type="submit"
-                        size="icon"
-                        variant="ghost"
-                        className="h-9 w-9 rounded-xl hover:bg-muted/50"
-                        disabled={!input.trim()}
-                      >
-                        <SendIcon className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </form>
+                  </PromptInputTools>
+                  <PromptInputSubmit
+                    status={status}
+                    onStop={stop}
+                    disabled={!input.trim() && status === "ready"}
+                  />
+                </PromptInputFooter>
+              </PromptInput>
             </div>
           </div>
         </div>
       )}
 
-      {/* Messages */}
+      {/* Messages — uses Conversation for smart auto-scroll */}
       {hasMessages && (
         <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full animate-fade-in overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-4 md:px-8 py-4 hide-scrollbar">
-            <div className="flex flex-col gap-4 md:gap-6 pb-4">
+          <Conversation className="flex-1">
+            <ConversationContent className="gap-4 md:gap-6 px-4 md:px-8 py-4">
               {messages.map((m, msgIdx) => (
-                <div
-                  key={m.id}
-                  data-chat-message={m.role}
-                  className={cn(
-                    m.role === "user" &&
-                      "bg-foreground text-background rounded-2xl p-3 md:p-4 ml-auto max-w-[90%] md:max-w-[75%] shadow-border-small font-medium text-sm md:text-base",
-                    m.role === "assistant" &&
-                      "max-w-full md:max-w-[85%] min-w-0 overflow-x-auto text-foreground/90 leading-relaxed text-sm md:text-base"
-                  )}
-                >
-                  {m.parts.map((part, i) => {
-                    switch (part.type) {
-                      case "reasoning":
-                        return (
-                          <ReasoningBlock
-                            key={`${m.id}-reasoning-${i}`}
-                            reasoningText={part.text}
-                            isStreaming={
-                              isStreaming &&
-                              msgIdx === messages.length - 1
-                            }
-                          />
-                        );
-                      case "text":
-                        return m.role === "assistant" ? (
-                          <Streamdown
-                            key={`${m.id}-${i}`}
-                            isAnimating={
-                              isStreaming &&
-                              m.id === messages[messages.length - 1]?.id
-                            }
-                            remarkPlugins={[remarkGfm, remarkCitations]}
-                            components={{ a: CitationLink }}
-                          >
-                            {part.text}
-                          </Streamdown>
-                        ) : (
-                          <div key={`${m.id}-${i}`}>{part.text}</div>
-                        );
-                      default: {
-                        // Handle tool call parts (tool-lookup_verse, tool-lookup_strongs, etc.)
-                        if (part.type.startsWith("tool-")) {
-                          const toolName = part.type.replace("tool-", "").replace(/_/g, " ");
-                          const state = (part as { state?: string }).state;
-                          const isRunning = state !== "output-available";
+                <Fragment key={m.id}>
+                  <Message
+                    from={m.role}
+                    className={cn(
+                      m.role === "user" &&
+                        "ml-auto max-w-[90%] md:max-w-[75%]",
+                      m.role === "assistant" &&
+                        "max-w-full md:max-w-[85%] min-w-0"
+                    )}
+                  >
+                    <MessageContent>
+                      <MessageParts
+                        message={m}
+                        isLastMessage={msgIdx === messages.length - 1}
+                        isStreaming={isStreaming}
+                      />
+                    </MessageContent>
+                  </Message>
 
-                          return (
-                            <div
-                              key={`${m.id}-tool-${i}`}
-                              className="flex items-center gap-2 py-1.5 px-3 my-1 rounded-lg bg-gold/5 border border-gold/10 text-xs text-gold/70 animate-fade-in"
-                            >
-                              {isRunning ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Check className="h-3 w-3" />
-                              )}
-                              <span className="capitalize">
-                                {isRunning ? `Looking up ${toolName}…` : `Found ${toolName}`}
-                              </span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      }
-                    }
-                  })}
-
-                  {/* Assistant action bar — copy, copy as markdown, export to note */}
+                  {/* Assistant action bar — copy, markdown, export, regenerate */}
                   {m.role === "assistant" && !isStreaming && (
-                    <div className="flex items-center gap-0.5 mt-3 pt-2 border-t border-border/30">
-                      <CopyButton
-                        text={(() => {
-                          // Concatenate ALL text parts — multi-step tool calls create multiple text parts
-                          return m.parts
-                            .filter((p) => p.type === "text" && "text" in p)
-                            .map((p) => (p as { type: "text"; text: string }).text)
-                            .join("\n\n")
-                            .replace(/[#*_`]/g, "");
-                        })()}
-                        label="Copy"
-                        icon={<Copy className="h-3 w-3" />}
-                      />
-                      <CopyButton
-                        text={(() => {
-                          return m.parts
-                            .filter((p) => p.type === "text" && "text" in p)
-                            .map((p) => (p as { type: "text"; text: string }).text)
-                            .join("\n\n");
-                        })()}
-                        label="Copy Markdown"
-                        icon={<ClipboardCopy className="h-3 w-3" />}
-                      />
-                      <button
+                    <MessageActions>
+                      <MessageAction
                         onClick={() => {
-                          // Concatenate ALL text parts for full export
-                          const allText = m.parts
-                            .filter((p) => p.type === "text" && "text" in p)
-                            .map((p) => (p as { type: "text"; text: string }).text)
-                            .join("\n\n");
-                          if (allText) {
-                            exportToNote(allText);
-                          }
+                          const plainText = getMessageText(m).replace(/[#*_`]/g, "");
+                          navigator.clipboard.writeText(plainText);
                         }}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground/60 hover:text-gold px-2 py-1 rounded-md hover:bg-gold/5 transition-colors"
-                        title="Save this response as a Study Note"
+                        label="Copy"
                       >
-                        <FileText className="h-3 w-3" />
-                        Export to Note
-                      </button>
-                    </div>
+                        <Copy className="size-3" />
+                      </MessageAction>
+                      <MessageAction
+                        onClick={() => {
+                          navigator.clipboard.writeText(getMessageText(m));
+                        }}
+                        label="Copy Markdown"
+                      >
+                        <ClipboardCopy className="size-3" />
+                      </MessageAction>
+                      <MessageAction
+                        onClick={() => {
+                          const text = getMessageText(m);
+                          if (text) exportToNote(text);
+                        }}
+                        label="Export to Note"
+                      >
+                        <FileText className="size-3" />
+                      </MessageAction>
+                      {msgIdx === messages.length - 1 && (
+                        <MessageAction
+                          onClick={() => regenerate()}
+                          label="Retry"
+                        >
+                          <RefreshCcw className="size-3" />
+                        </MessageAction>
+                      )}
+                    </MessageActions>
                   )}
 
                   {/* Citation sources footer */}
-                  {m.role === "assistant" && !isStreaming && (() => {
-                    const tp = m.parts.find((p) => p.type === "text");
-                    if (!tp || !("text" in tp)) return null;
-                    const citations = parseCitations(tp.text);
-                    if (citations.length === 0) return null;
-                    const sources = extractSourceFooter(citations);
-                    return (
-                      <div className="mt-2 pt-2 border-t border-border/20">
-                        <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">
-                          Sources Referenced
-                        </span>
-                        <div className="flex flex-wrap gap-1.5 mt-1.5">
-                          {sources.map((s, si) => (
-                            <Link
-                              key={si}
-                              href={s.href}
-                              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-lg bg-gold/5 text-gold/80 hover:bg-gold/10 hover:text-gold border border-gold/10 transition-colors"
-                            >
-                              <span>{s.type}</span>
-                              <span>{s.display}</span>
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  {m.role === "assistant" && !isStreaming && (
+                    <CitationSourcesFooter message={m} />
+                  )}
 
                   {/* User message — edit button */}
                   {m.role === "user" && !isStreaming && (
-                    <div className="flex justify-end mt-1.5">
-                      <button
+                    <MessageActions className="justify-end">
+                      <MessageAction
                         onClick={() => {
                           const tp = m.parts.find((p) => p.type === "text");
                           if (tp && "text" in tp) {
                             setInput(tp.text);
-                            // Remove this message and everything after it
                             setMessages(messages.slice(0, msgIdx));
                           }
                         }}
-                        className="flex items-center gap-1 text-[10px] text-background/50 hover:text-background/80 px-1.5 py-0.5 rounded transition-colors"
-                        title="Edit and resend"
+                        label="Edit and resend"
                       >
-                        <Pencil className="h-2.5 w-2.5" />
-                      </button>
-                    </div>
+                        <Pencil className="size-3" />
+                      </MessageAction>
+                    </MessageActions>
                   )}
-                </div>
+                </Fragment>
               ))}
 
-              {/* Streaming indicator */}
-              {isStreaming && messages[messages.length - 1]?.role === "user" && (
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin text-gold" />
-                  <span className="text-xs">Thinking...</span>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
+              {/* Submitted indicator (before streaming starts) */}
+              {status === "submitted" && <Spinner />}
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
         </div>
       )}
 
       {/* Error */}
       {error && (
         <div className="max-w-4xl mx-auto w-full px-4 md:px-8 pb-4 animate-slide-down">
-          <Alert variant="destructive" className="flex flex-col gap-2">
-            <div className="flex flex-row gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <AlertDescription className="dark:text-red-400 text-red-600">
-                The response was interrupted — this can happen if your screen turned off
-                or the connection dropped. Tap <strong>Retry</strong> to try again.
-              </AlertDescription>
-            </div>
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-sm">
+            <span className="text-destructive">
+              The response was interrupted — tap <strong>Retry</strong> to try again.
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -809,81 +658,36 @@ export function Chat({ modelId = DEFAULT_MODEL }: { modelId: string }) {
             >
               Retry
             </Button>
-          </Alert>
+          </div>
         </div>
       )}
 
       {/* Input bar (when messages exist) */}
       {hasMessages && (
-        <div className="w-full max-w-4xl mx-auto">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              sendMessage(
-                { text: input },
-                { body: { modelId: currentModelId } }
-              );
-              setInput("");
-            }}
-            className="px-4 md:px-8 pb-6 md:pb-8"
+        <div className="w-full max-w-4xl mx-auto px-4 md:px-8 pb-6 md:pb-8">
+          <PromptInput
+            onSubmit={handlePromptSubmit}
+            className="w-full"
           >
-            <div className="flex items-end gap-3 p-4 rounded-2xl glass-effect shadow-border-medium transition-all duration-200 ease-out">
-              <ModelSelectorHandler
-                modelId={modelId}
-                onModelIdChange={handleModelIdChange}
-              />
-              <div className="flex flex-1 items-end">
-                <textarea
-                  name="prompt"
-                  placeholder="Ask a follow-up question..."
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    // Auto-resize
-                    e.target.style.height = 'auto';
-                    e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px';
-                  }}
-                  value={input}
-                  rows={1}
-                  className="flex-1 border-0 bg-transparent focus-visible:outline-none text-base placeholder:text-muted-foreground/60 font-medium resize-none min-h-[36px] max-h-[200px] py-2"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (input.trim()) {
-                        sendMessage(
-                          { text: input },
-                          { body: { modelId: currentModelId } }
-                        );
-                        setInput('');
-                        e.currentTarget.style.height = 'auto';
-                      }
-                    }
-                  }}
+            <PromptInputTextarea
+              value={input}
+              placeholder="Ask a follow-up question..."
+              onChange={(e) => setInput(e.currentTarget.value)}
+            />
+            <PromptInputFooter>
+              <PromptInputTools>
+                <ModelSelector
+                  modelId={currentModelId}
+                  onModelChange={handleModelIdChange}
                 />
-                {isStreaming ? (
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 rounded-xl hover:bg-red-500/10 text-red-400 hover:text-red-500 transition-colors"
-                    onClick={() => stop()}
-                    title="Stop generating"
-                  >
-                    <Square className="h-4 w-4 fill-current" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    size="icon"
-                    variant="ghost"
-                    className="h-9 w-9 rounded-xl hover:bg-accent hover:text-accent-foreground hover:scale-110 transition-all duration-150 ease disabled:opacity-50 disabled:hover:scale-100"
-                    disabled={!input.trim()}
-                  >
-                    <SendIcon className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </form>
+              </PromptInputTools>
+              <PromptInputSubmit
+                status={status}
+                onStop={stop}
+                disabled={!input.trim() && status === "ready"}
+              />
+            </PromptInputFooter>
+          </PromptInput>
         </div>
       )}
 

@@ -59,7 +59,8 @@ export function MarkdownRenderer({ content }: { content: string }) {
         },
         hr: () => <hr className="border-border/30 my-4" />,
         // Use CitationLink to render citations as interactive tooltips (same as AI Study)
-        a: CitationLink,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        a: CitationLink as any,
         table: ({ children }) => (
           <div className="overflow-x-auto mb-3">
             <table className="w-full text-xs border-collapse border border-border/30">{children}</table>

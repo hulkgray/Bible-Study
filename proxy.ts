@@ -30,6 +30,7 @@ const PUBLIC_EXACT = [
   "/api/auth/logout",
   "/api/auth/forgot-password",
   "/api/auth/reset-password",
+  "/api/notes/by-slug", // Bypass for shared public notes
 ];
 
 function getSecretKey() {

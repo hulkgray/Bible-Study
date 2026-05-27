@@ -58,7 +58,7 @@ export default function BibleReaderPage() {
 
   // Set of bookmarked verse numbers for quick lookup
   const bookmarkedVerses = new Set<number>(
-    (bookmarkData ?? []).map((b: { verse: number }) => b.verse)
+    (Array.isArray(bookmarkData) ? bookmarkData : []).map((b: { verse: number }) => b.verse)
   );
 
   const handleToggleBookmark = async (verseNum: number) => {
@@ -66,9 +66,10 @@ export default function BibleReaderPage() {
 
     // Optimistic update
     const isCurrentlyBookmarked = bookmarkedVerses.has(verseNum);
+    const currentBookmarks = Array.isArray(bookmarkData) ? bookmarkData : [];
     const optimisticData = isCurrentlyBookmarked
-      ? (bookmarkData ?? []).filter((b: { verse: number }) => b.verse !== verseNum)
-      : [...(bookmarkData ?? []), { verse: verseNum, book: bookInfo.name, chapter: chapterNum }];
+      ? currentBookmarks.filter((b: { verse: number }) => b.verse !== verseNum)
+      : [...currentBookmarks, { verse: verseNum, book: bookInfo.name, chapter: chapterNum }];
 
     mutate(bookmarkKey, optimisticData, false);
 
