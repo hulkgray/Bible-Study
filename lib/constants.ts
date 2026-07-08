@@ -7,7 +7,7 @@
  */
 
 /** Default model — best balance of quality, speed, and cost */
-export const DEFAULT_MODEL = "anthropic/claude-opus-4.7";
+export const DEFAULT_MODEL = "anthropic/claude-opus-4.8";
 
 /** Temperature for Bible study — low for theological accuracy, slight warmth for readability */
 export const DEFAULT_TEMPERATURE = 0.3;
@@ -18,8 +18,8 @@ export const DEFAULT_TEMPERATURE = 0.3;
  */
 export const SUPPORTED_MODELS = [
   // Anthropic — flagship reasoning + 1M context window
-  "anthropic/claude-opus-4.7",
-  "anthropic/claude-opus-4.6",
+  "anthropic/claude-fable-5",
+  "anthropic/claude-opus-4.8",
   "anthropic/claude-sonnet-4.6",
   "anthropic/claude-haiku-4.5",
 
@@ -41,8 +41,8 @@ export const SUPPORTED_MODELS = [
  * Used by the chat route to set maxOutputTokens dynamically per-model.
  */
 export const MAX_OUTPUT_TOKENS: Record<string, number> = {
-  "anthropic/claude-opus-4.7":       128_000,
-  "anthropic/claude-opus-4.6":       128_000,
+  "anthropic/claude-fable-5":        128_000,
+  "anthropic/claude-opus-4.8":       128_000,
   "anthropic/claude-sonnet-4.6":     128_000,
   "anthropic/claude-haiku-4.5":       64_000,
   "google/gemini-3.5-flash":          65_536,
@@ -60,17 +60,17 @@ export const MODEL_INFO: Record<
   string,
   { label: string; provider: string; tier: string; description: string }
 > = {
-  "anthropic/claude-opus-4.7": {
-    label: "Claude Opus 4.7 (Reasoning)",
+  "anthropic/claude-fable-5": {
+    label: "Claude Fable (Deep Reasoning)",
     provider: "Anthropic",
     tier: "flagship",
-    description: "Best theological reasoning, max reasoning enabled",
+    description: "Deep reasoning powerhouse for complex tasks",
   },
-  "anthropic/claude-opus-4.6": {
-    label: "Claude Opus 4.6",
+  "anthropic/claude-opus-4.8": {
+    label: "Claude Opus 4.8 (Reasoning)",
     provider: "Anthropic",
     tier: "flagship",
-    description: "Best theological reasoning, 1M tokens",
+    description: "Best theological reasoning, improved agentic judgment",
   },
   "anthropic/claude-sonnet-4.6": {
     label: "Claude Sonnet 4.6",

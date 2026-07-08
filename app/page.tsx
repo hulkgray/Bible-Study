@@ -56,7 +56,7 @@ const FEATURES = [
 const TRUST_POINTS = [
   { icon: Shield, text: "Private & secure — your notes and bookmarks are yours alone" },
   { icon: Zap, text: "Lightning fast — built on edge infrastructure worldwide" },
-  { icon: Sparkles, text: "9 AI models — choose from Anthropic, Google, OpenAI, xAI, and Meta" },
+  { icon: Sparkles, text: "10 AI models — choose from Anthropic, Google, OpenAI, xAI, and Meta" },
 ];
 
 /**

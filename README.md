@@ -18,7 +18,7 @@ An open-source, AI-powered Bible study platform built with **Next.js 16**, **Ver
 ### 🤖 AI Study Agent
 - Conversational AI assistant for theological study
 - **Multi-provider support** via Vercel AI Gateway — choose from:
-  - Anthropic (Claude Opus 4.6, Sonnet, Haiku)
+  - Anthropic (Claude Fable, Claude Opus 4.8, Sonnet, Haiku)
   - Google (Gemini 3.1 Pro, Gemini 3 Flash)
   - OpenAI (GPT-5 Mini, GPT-5 Nano)
   - xAI (Grok 4.20)

@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS catechism_entries (
 CREATE TABLE IF NOT EXISTS chat_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title VARCHAR(500) NOT NULL DEFAULT 'New Conversation',
-  model_id VARCHAR(100) NOT NULL DEFAULT 'anthropic/claude-opus-4.6',
+  model_id VARCHAR(100) NOT NULL DEFAULT 'anthropic/claude-opus-4.8',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

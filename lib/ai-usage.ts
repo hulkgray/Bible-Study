@@ -5,7 +5,8 @@ import { getDbClient } from "@/lib/db";
  * These are estimates based on public pricing as of March 2026.
  */
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "anthropic/claude-opus-4.6":   { input: 15.00,  output: 75.00 },
+  "anthropic/claude-fable-5":    { input: 10.00,  output: 50.00 },
+  "anthropic/claude-opus-4.8":   { input: 15.00,  output: 75.00 },
   "anthropic/claude-sonnet-4.6": { input: 3.00,   output: 15.00 },
   "anthropic/claude-haiku-4.5":  { input: 0.80,   output: 4.00  },
   "google/gemini-3.1-pro":       { input: 1.25,   output: 5.00  },
